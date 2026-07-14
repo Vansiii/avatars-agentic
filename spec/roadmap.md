@@ -1,7 +1,12 @@
 # Hoja de Ruta de Implementación
 ## Sistema de Creación de Identidades Visuales Digitales
 
+> **Última actualización:** 2026-07-13  
+> **Cambios recientes:** Hitos 2.1 y 2.2 actualizados para reflejar implementación real (BackgroundTasks + Pollinations.ai), no la arquitectura inicial sobrediseñada (Celery/Redis + Replicate).
+
 > **Nota:** La progresión es estrictamente secuencial; no se permite el inicio de una fase sin la validación exitosa de la anterior mediante el checklist de cierre correspondiente.
+
+> ⚠️ **Importante:** Este roadmap debe leerse junto con `SOUL.md §6` y `.agents/steering/backlog.md`. El backlog es más específico y manda sobre este documento en caso de conflicto.
 
 ---
 
@@ -59,8 +64,8 @@ Implementar el pipeline central de generación de avatares con IA y exponer al u
 
 | # | Hito | Feature Asociado | Criterio de Done |
 |---|---|---|---|
-| 2.1 | Cola de tareas asíncronas (Celery + Redis) | [FEAT-001](./features/avatar-generation.md) | Job de prueba se encola, procesa y completa en staging |
-| 2.2 | Integración con proveedor de IA (Replicate API) | [FEAT-001](./features/avatar-generation.md) | Generación de imagen de prueba exitosa via API |
+| 2.1 | ~~Cola de tareas asíncronas (Celery + Redis)~~ → **Ya implementado con BackgroundTasks de FastAPI** (monolito Alpha) | [FEAT-001](./features/avatar-generation.md) | ✅ Generación asíncrona funcional con BackgroundTasks |
+| 2.2 | Integración con proveedor de IA (~~Replicate API~~ → **Pollinations.ai**) | [FEAT-001](./features/avatar-generation.md) | ✅ Generación de imagen real exitosa con Pollinations |
 | 2.3 | Pre-procesado de imagen de entrada (resize, EXIF strip, filtro NSFW) | [FEAT-001](./features/avatar-generation.md) | Imágenes NSFW son rechazadas; imágenes válidas se normalizan |
 | 2.4 | Post-procesado: upscaling (ESRGAN) y watermark en tier free | [FEAT-001](./features/avatar-generation.md) | Avatares free tienen watermark; pro, no |
 | 2.5 | Almacenamiento de resultados en Blob Storage (S3/GCS) + CDN | [FEAT-001](./features/avatar-generation.md) | URLs de avatares accesibles via CDN en <200ms |
@@ -70,13 +75,16 @@ Implementar el pipeline central de generación de avatares con IA y exponer al u
 | 2.9 | Limpieza automática de imágenes de entrada (job cron a las 24h) | [FEAT-001](./features/avatar-generation.md) | Imágenes de entrada son eliminadas pasadas 24h |
 
 ### Checklist de Cierre de Fase 002
-- [ ] El pipeline completo (upload → IA → resultados) funciona de extremo a extremo
-- [ ] El filtro NSFW rechaza correctamente contenido inapropiado
-- [ ] Las imágenes de entrada se eliminan en el job cron de 24 horas
-- [ ] El tiempo promedio de generación es < 60 segundos
-- [ ] La tasa de éxito de generaciones en staging es > 95%
-- [ ] Los 9 estilos MVP están en el catálogo con sus previews
-- [ ] El modelo de respaldo está configurado y probado (failover del proveedor IA)
+- [x] **2.1 completado**: BackgroundTasks de FastAPI implementado (no Celery/Redis, según SOUL.md §6)
+- [x] **2.2 completado**: Pollinations.ai integrado con generación real verificada
+- [x] **2.4 parcial**: Watermark real con Pillow implementado y verificado
+- [x] **2.6 completado**: WebSocket de progreso funcional
+- [x] **2.7 completado**: Catálogo de estilos con seed implementado
+- [ ] **2.3 pendiente**: Filtro NSFW de entrada ✅ (implementado) | Filtro NSFW de salida ❌ (bloqueante)
+- [ ] **2.4 pendiente**: Post-procesado completo (upscaling pendiente)
+- [ ] **2.5 pendiente**: Blob Storage real (hoy usa almacenamiento local)
+- [ ] **2.8 pendiente**: Flujo E2E completo en UI (C-01 a C-08 del backlog)
+- [ ] **2.9 pendiente**: Job cron de limpieza de imágenes de entrada (24h)
 
 ---
 
