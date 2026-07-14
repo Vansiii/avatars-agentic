@@ -69,6 +69,11 @@ Abre `http://localhost:8000/docs` y ejecuta el endpoint que tocaste de verdad. *
 
 ## Deuda técnica conocida (no la arregles sin que esté en el backlog)
 
-- `main.py` usa `Base.metadata.create_all` en el arranque en vez de migraciones Alembic. Vale para el Alpha.
-- CORS está en `allow_origins=["*"]`. Hay que cerrarlo antes de producción.
-- `SECRET_KEY` tiene un valor por defecto inseguro en `settings.py`.
+- `main.py` usa `Base.metadata.create_all` en el arranque en vez de migraciones Alembic. Vale para el Alpha (ver `E-03`).
+- CORS y `SECRET_KEY` ya se cerraron (`D-03`, `D-04`) — **no reabras esto sin comprobar `main.py`/`settings.py` primero**; el HEARTBEAT viejo que decía lo contrario estaba desactualizado en otras cosas, así que no asumas nada sin mirar.
+
+## Deuda técnica real, no documentada hasta la auditoría de 2026-07-14
+
+- **Rate limiting nunca identifica al usuario.** `RateLimitMiddleware._get_identifier()` (`app/middleware/rate_limit.py:49`) lee `request.state.user_id`, pero ningún middleware lo escribe — la autenticación pasa por `Depends(get_current_user)`, que corre *después* del middleware. El límite de "20 generaciones/min por usuario" es en la práctica por IP, y `X-Forwarded-For` se acepta sin validar (trivialmente falsificable). Si vas a tocar rate limiting, este es el bug real, no cosmético.
+- **`input_image_url` es un valor inventado.** `generations.py:354` guarda siempre `"uploads/mock_input.png"` cuando hay archivo — no existe ese path. `cleanup.py::cleanup_input_images()` filtra por ese prefijo, nunca encuentra el archivo real, y aun así limpia el campo en la DB. El borrado a 24h de imágenes de entrada (`SOUL.md §5`) no se ha ejercitado ni una vez porque no hay imagen de entrada persistida todavía. No cierres `D-02` como "verificado" sin antes implementar la persistencia real o, al menos, un test que dispare el cleanup contra una fila real.
+- **Cero tests.** `backend/tests/` solo tiene un `__init__.py` vacío. `B-10` menciona `test_generation.py`/`test_full_flow.py` como creados — no existen en disco. Antes de tocar el filtro NSFW (ver deuda de `ai.md`), escribe al menos un test con una imagen fixture que debería rechazarse; es la única forma de detectar si las categorías de NudeNet siguen sin coincidir.

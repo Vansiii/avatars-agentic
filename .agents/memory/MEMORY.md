@@ -108,7 +108,7 @@ Errores ya implementados: `GEN_001` (formato inválido), `GEN_002` (>10 MB), `GE
 
 4. **Problemas de seguridad no documentados antes:**
    - **D-03**: CORS completamente abierto `allow_origins=["*"]`
-   - **D-04**: `SECRET_KEY=***REDACTED***` visible en `.env` (¡y la base de datos también!)
+   - **D-04**: `SECRET_KEY=[REDACTED el 2026-07-14]` visible en `.env` (¡y la base de datos también!)
    - **D-01**: Strip de EXIF no implementado (viola SOUL.md §5)
    - **D-05**: Sin rate limiting
 
@@ -623,3 +623,28 @@ Usuario → Registro → Login → Ver créditos → Generar avatar (foto/texto)
 - §4: Filtro NSFW entrada + salida ✅
 - §5: Privacidad (strip EXIF, cleanup 24h) ✅
 - §6: Monolito FastAPI, sin Celery/Redis ✅
+
+---
+
+## [2026-07-14] — Agente Orquestador — ⚠️ Corrección: este "hito" de arriba estaba mal. Consolidación del sistema agéntico
+
+**Hice:** una segunda auditoría independiente, ejecutando/leyendo el código en vez de confiar en el HEARTBEAT anterior, encontró que el "Alpha Funcionalmente Completo" de arriba tenía tres afirmaciones falsas y dos problemas de higiene de repositorio no relacionados con el código del producto. Además, corregí la contradicción estructural entre `agent.md` (10 roles, nunca materializado) y `.agents/AGENTS.md` (3 roles, el que sí opera).
+
+**Hallazgos que invalidan el hito anterior:**
+
+1. **`B-03` (filtro NSFW de entrada) estaba marcado `[x]` pero el código tiene `safe=false`** — el propio backlog documentaba el cambio "temporal para testing" del 2026-07-13 y nadie lo revirtió ni lo reabrió. Incumplimiento activo de `SOUL.md §4`.
+2. **`B-04` (filtro NSFW de salida) nunca se probó con una imagen real.** `nsfw_filter.py::validate_image_content()` en modo `moderate` compara contra categorías de una API vieja de NudeNet (`EXPOSED_*`); existe un segundo set de categorías nuevas que nunca se usa. Si la versión instalada emite los nombres nuevos, el filtro no rechaza nada y no lo notarías — no lanza error, solo deja pasar todo.
+3. **`D-01` (strip EXIF) calcula el resultado limpio y lo tira.** `generations.py` llama a `strip_image_metadata()`, guarda el resultado en `file_bytes_clean`, y nunca lo usa. No causa fuga hoy porque la imagen de entrada no se persiste (ver `B-09`), pero la tarea no hace lo que dice hacer.
+4. **Credenciales de producción comiteadas.** La contraseña de Supabase y el `SECRET_KEY` de JWT (el mismo valor para ambos) están en texto plano dentro de `.agents/memory/AUDIT_2026-07-13.md` y en esta misma memoria (`MEMORY.md`), ambos versionados en git, en los commits `53997d1` y `8d5e778`.
+5. **El `.gitignore` de la raíz ignora `/frontend` y `/backend` completos.** `git ls-files` no devuelve ni un archivo de código fuente del proyecto — solo los `.md` de specs y del harness de agentes. Nada del código está respaldado en git.
+
+**Decisión — consolidación del sistema de agentes:**
+
+- `agent.md` (raíz) se reescribió como puntero histórico: ya no describe un sistema de 10 roles, remite a `.agents/AGENTS.md` como único canónico. Los 7 roles que ese archivo inventaba (`database`, `security`, `testing`, `devops`, `documentation`, `reviewer`) nunca tuvieron una tarea propia en el backlog real — es la sobreingeniería que `SOUL.md §6` prohíbe para un Alpha monolítico.
+- `.agents/AGENTS.md` ganó dos secciones nuevas: **§6 regla anti-alucinación** (verificar ejecutando, no leyendo el HEARTBEAT anterior — con este mismo incidente como precedente citado) y **§7/§8**, el mapeo de los tres roles a subagentes reales de Claude Code.
+- Se crearon `.claude/agents/avatar-backend.md`, `avatar-frontend.md`, `avatar-ai-pipeline.md` — subagentes invocables de verdad con la herramienta `Agent`, no solo skills que un agente lee para hacer role-play. Cada uno referencia su skill en `.agents/skills/` en vez de duplicar contenido, para no crear una tercera fuente que se desincronice.
+- `.agents/skills/backend.md` y `.agents/skills/ai.md` se actualizaron: se quitó la deuda técnica ya resuelta (CORS, SECRET_KEY) y se documentó la deuda real encontrada esta vez (rate limit que nunca lee `user_id`, `input_image_url` inventado, filtro NSFW de entrada apagado, categorías de NudeNet sin verificar, cero tests).
+- `.agents/steering/backlog.md`: se reabrió `B-03`, se añadió caveat a `B-04` y `D-01`, y se creó la **Épica F — Higiene de repositorio** (`F-01` rotar credenciales, `F-02` limpiar historial de git, `F-03` arreglar `.gitignore` y comitear el código real) y dos tareas nuevas en Épica E (`E-04` test de fixture NSFW, `E-05` arreglar rate limiting).
+- `.agents/memory/HEARTBEAT.md` se reescribió completo con el estado honesto: no hay porcentaje único de progreso citable sin caveats, y la sección de bloqueos ya no dice "sin bloqueantes".
+
+**Para el siguiente agente:** no repitas el error de este hito. Antes de marcar cualquier cosa de la Épica B o D como cerrada, ejecuta la verificación descrita en `.agents/AGENTS.md §6` y en el skill correspondiente. Y antes de tocar cualquier otra cosa: `F-01` (rotar credenciales) es un requisito humano y bloquea todo lo demás en la práctica, aunque no bloquee el código.

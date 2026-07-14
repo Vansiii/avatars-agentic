@@ -29,8 +29,8 @@
 
 - [x] **B-01** · `POLLINATIONS_API_KEY` en `app/config/settings.py` + `pillow` en `requirements.txt` (Pollinations no requiere cliente propio, se usa `httpx` que ya existía)
 - [x] **B-02** · Mock de Unsplash sustituido por la llamada real a `image.pollinations.ai` en `generate_avatar_background`, eventos del WebSocket conservados sin cambios · verificado en vivo (imagen real descargada y guardada)
-- [x] **B-03** · **Filtro NSFW de entrada** vía `safe=true` de Pollinations, fail-closed (cualquier 4xx = rechazo) → llega como evento `generation_failed` con `error_code: GEN_004` por WebSocket, **sin cobrar crédito** *(SOUL §4)* — nota: no es un 422 HTTP directo porque el POST ya respondió 202 antes de saberse el resultado. **ACTUALIZACIÓN 2026-07-13**: temporalmente en `safe=false` para testing (filtro de Pollinations muy estricto, rechaza prompts legítimos). El filtro local NudeNet sigue activo.
-- [x] **B-04** 🔴 · **Filtro NSFW de salida** con NudeNet integrado en el pipeline. Valida todas las imágenes generadas ANTES de aplicar watermark y guardar. Si detecta contenido inapropiado → `generation_failed` con `GEN_004`, sin cobrar crédito. Log en `security.log` *(SOUL §4)* — **COMPLETADO 2026-07-13**. **FIX CRÍTICO aplicado**: NudeNet requiere archivo temporal en disco (no BytesIO). Implementado con `tempfile.NamedTemporaryFile` + limpieza correcta.
+- [ ] **B-03** 🔴 · **REABIERTA 2026-07-14** · Filtro NSFW de entrada vía `safe=true` de Pollinations — **sigue en `safe=false` en el código**, la marca `[x]` anterior era incorrecta (se verificó que existía, no que estuviera activo). Mientras `safe=false`, ningún prompt de usuario pasa por moderación de proveedor: incumplimiento directo de `SOUL.md §4`. Reactivar `safe=true` o documentar por qué se queda desactivado como decisión explícita (no lo decide un agente solo, ver `SOUL.md` cabecera). Ver `.agents/skills/ai.md`.
+- [x] **B-04** 🔴 · **Filtro NSFW de salida** con NudeNet integrado en el pipeline. Valida todas las imágenes generadas ANTES de aplicar watermark y guardar. Si detecta contenido inapropiado → `generation_failed` con `GEN_004`, sin cobrar crédito. Log en `security.log` *(SOUL §4)* — **COMPLETADO 2026-07-13**. **FIX CRÍTICO aplicado**: NudeNet requiere archivo temporal en disco (no BytesIO). Implementado con `tempfile.NamedTemporaryFile` + limpieza correcta. **⚠️ CAVEAT 2026-07-14**: nunca se verificó con una imagen fixture real. `validate_image_content()` en modo `moderate` solo compara contra las categorías de la API vieja de NudeNet (`EXPOSED_*`); si la versión instalada usa los nombres nuevos (`FEMALE_BREAST_EXPOSED`, etc.), el filtro no rechaza nada y no lo notarías porque no lanza error. No vuelvas a marcar esto como cerrado sin ese test. Ver `.agents/skills/ai.md` y `.agents/skills/backend.md` (sección de tests).
 - [x] **B-05** · **Watermark real con Pillow** (`services/watermark.py`) sobre los píxeles, para toda imagen sin excepción · verificado visualmente *(SOUL §3)*
 - [x] **B-06** · Log de seguridad append-only (`app/media/security.log`, JSONL) para rechazos NSFW de entrada *(SOUL §4)*
 - [x] **B-07** · Reintentos (3, backoff exponencial) ante fallo transitorio (`image_provider.py`); NSFW no se reintenta
@@ -60,7 +60,7 @@
 
 > Dueño: **Agente Backend** · Skill: `.agents/skills/backend.md`
 
-- [x] **D-01** 🔴 · Strip de metadatos EXIF implementado en `nsfw_filter.py::strip_image_metadata()`. Se aplica a todas las imágenes subidas en el endpoint de generación. Convierte a JPEG con `exif=b""` para eliminar geolocalización y datos sensibles *(SOUL §5)* — **COMPLETADO 2026-07-13**
+- [x] **D-01** 🔴 · Strip de metadatos EXIF implementado en `nsfw_filter.py::strip_image_metadata()` — **⚠️ CAVEAT 2026-07-14**: en `generations.py` el resultado limpio (`file_bytes_clean`) se calcula y se descarta sin usarse; el archivo original sigue circulando sin strip. Hoy no causa una fuga real porque la imagen de entrada no se persiste en disco todavía (ver `B-09`), pero en cuanto se implemente storage de la imagen de entrada, este bug expone geolocalización. No lo cierres de nuevo sin conectar `file_bytes_clean` al flujo real *(SOUL §5)*.
 - [x] **D-02** 🟡 · Borrado automático implementado con scheduler en background. `cleanup.py` ejecuta cada 6 horas: elimina imágenes de entrada >24h y avatares free expirados >30 días. Integrado en lifespan de FastAPI *(SOUL §5)* — **COMPLETADO 2026-07-13**
 - [x] **D-03** 🟡 · CORS cerrado: solo permite `localhost:3000`, `localhost:5173` y variantes con `127.0.0.1`. Eliminado `allow_origins=["*"]` inseguro. Listo para producción agregando dominios reales — **COMPLETADO 2026-07-13**
 - [x] **D-04** 🟡 · SECRET_KEY sin default inseguro: `settings.py` valida en `__init__()` que SECRET_KEY esté configurado, sino falla el arranque con mensaje claro. No permite valores vacíos ni defaults *(SOUL §5)* — **COMPLETADO 2026-07-13**
@@ -73,6 +73,18 @@
 - [ ] **E-01** 🟡 · Test end-to-end: registro → login → generar → progreso → descarga → historial
 - [ ] **E-02** 🟡 · `README.md` de arranque: cómo levantar backend y frontend en local
 - [ ] **E-03** 🟢 · Migraciones Alembic reales en lugar de `Base.metadata.create_all`
+- [ ] **E-04** 🟡 · Al menos un test con fixture NSFW (imagen benigna + imagen que debería rechazarse) para verificar de una vez si `nsfw_filter.py` funciona de verdad. Ver caveat de `B-04`.
+- [ ] **E-05** 🟢 · Corregir `RateLimitMiddleware._get_identifier()`: hoy nunca lee `user_id` de verdad, el límite "por usuario" es en realidad por IP. Ver `.agents/skills/backend.md`.
+
+---
+
+## Épica F — Higiene de repositorio 🔴 (bloqueante, no es código del producto)
+
+> No es una feature: es sobre el propio repositorio git. Dueño: quien tenga acceso a rotar credenciales (humano), luego cualquier agente para lo mecánico.
+
+- [ ] **F-01** 🔴 · **Rotar ya** la contraseña de la base de datos Supabase y el `SECRET_KEY` de JWT. Ambos quedaron expuestos en texto plano dentro de `.agents/memory/AUDIT_2026-07-13.md` y `.agents/memory/MEMORY.md`, que sí están versionados — y además el `SECRET_KEY` actual **es el mismo valor** que la contraseña de la DB. Rotar con valores distintos entre sí. Esto es un requisito humano, ningún agente debe generar ni aplicar las nuevas credenciales en nombre del usuario.
+- [ ] **F-02** 🔴 · Después de F-01: limpiar del historial de git los commits que contienen la credencial (`53997d1`, `8d5e778` y cualquier commit posterior que la repita), o aceptar el riesgo si el repo ya es privado y las credenciales ya se rotaron.
+- [ ] **F-03** 🔴 · `.gitignore` de la raíz solo tiene `/frontend` y `/backend` — ignora el código fuente completo del proyecto. `git ls-files` no devuelve ni un archivo de `backend/app/` ni `frontend/src/`. No hay nada del código versionado hoy. Reemplazar por un `.gitignore` que ignore artefactos (`node_modules/`, `dist/`, `__pycache__/`, `venv/`, `.env`, `app/media/`) y comitear el código fuente — **solo después de F-01**, para no volver a arrastrar `.env` a un commit nuevo.
 
 ---
 
