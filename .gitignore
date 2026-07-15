@@ -1,2 +1,37 @@
-/frontend
-/backend
+# Local secrets and developer configuration
+.env
+.env.*
+!.env.example
+!.env.template
+
+# JavaScript dependencies and tool caches
+**/node_modules/
+**/.npm/
+**/.cache/
+
+# Python environments and bytecode/tool caches
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Known generated build/test output
+/frontend/dist/
+/frontend/coverage/
+/backend/dist/
+/backend/build/
+/backend/coverage/
+.coverage
+htmlcov/
+
+# Local editor, agent, OS, and log state
+.idea/
+.atl/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+*.log
