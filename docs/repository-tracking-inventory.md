@@ -37,10 +37,19 @@ $ git clean -nd
 → No output — no source or documentation file is eligible for deletion
 ```
 
-### Staged paths
+### Committed paths
 
-- `.gitignore` (modified)
-- `SECURITY.md` (added)
+Source and documentation files committed in this change:
+
+| Path | Status | Category |
+| ------ | -------- | ---------- |
+| `.gitignore` | modified | configuration |
+| `SECURITY.md` | added | documentation |
+| `docs/repository-tracking-inventory.md` | added | documentation |
+
+**Total: 3 committed paths** (1 config, 2 docs).
+
+Note: No `frontend/` or `backend/` subdirectories exist in this repository's working tree. The previous blanket `.gitignore` rules were preemptive — no application source code was untracked. The fix ensures that if those directories are created in the future, their source files will be properly tracked.
 
 ### Secret scan
 
