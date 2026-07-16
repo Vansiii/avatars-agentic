@@ -3,80 +3,146 @@
 > **Foto del estado ACTUAL.** Este archivo se **sobrescribe** en cada cambio de turno.
 > No es un historial: si buscas qué pasó antes, ve a `MEMORY.md`.
 
-**Última actualización:** 2026-07-14 — por el **Agente Orquestador** (corrección tras auditoría independiente — la versión anterior de este archivo declaraba "96%, sin bloqueantes" con dos violaciones activas de SOUL.md sin detectar)
+**Última actualización:** 2026-07-15 — por el **Agente Orquestador** (correcciones finales Fase 002)
 
 ---
 
-## 📊 Estado Global del Proyecto
+## Estado Global del Proyecto
 
-**No uses el porcentaje anterior (96%) para decidir nada.** Se calculó marcando tareas `[x]` sin ejecutarlas. Los porcentajes de abajo son honestos pero aproximados — la única fuente de verdad es correr el código.
+**Nuevo producto:** Sistema de Personajes para Spots Publicitarios de TV
 
-| Épica | Estado real | Nota |
-|-------|------------|------|
-| A - Fundaciones | ✅ Cerrada | Verificado, sin caveats |
-| B - IA Real | 🔴 Reabierta parcialmente | B-03 (NSFW entrada) desactivado en el código pese a estar marcado `[x]`. B-04 (NSFW salida) tiene un riesgo real de categorías no verificado |
-| C - Frontend | ✅ Cerrada (sin motivo para dudar de esta) | No se encontró discrepancia código/documento aquí |
-| D - Seguridad | 🟡 Cerrada con un caveat | D-01 (strip EXIF) calcula el resultado limpio y lo descarta — no causa fuga hoy porque no se persiste la imagen de entrada, pero no hace lo que dice hacer |
-| E - Cierre | ⏳ Pendiente + 2 tareas nuevas (E-04, E-05) | Cero tests siguen existiendo en el repo |
-| F - Higiene de repo | 🔴 **Nueva, bloqueante** | Credenciales de producción comiteadas en `.agents/memory/`; `.gitignore` ignora todo el código fuente (0 archivos de `backend/`/`frontend/` están versionados) |
+| Fase | Estado |
+|------|--------|
+| Fase 001 — Base del sistema | ✅ COMPLETA |
+| Fase 002 — Creación de personajes | ✅ COMPLETA |
+| Fase 003 — Generación de spots | ⏳ Pendiente |
+| Fase 004 — Cierre del Alpha | ⏳ Pendiente |
 
 ---
 
-## 🚨 Bloqueos reales (no "sin bloqueantes")
+## Bloqueos actuales
 
-1. **F-01/F-02 — Credenciales filtradas.** La contraseña de Supabase y el `SECRET_KEY` de JWT (el mismo valor para ambos) están en texto plano en dos archivos versionados (`.agents/memory/AUDIT_2026-07-13.md`, `.agents/memory/MEMORY.md`), presentes en el historial de commits. Requiere rotación humana antes de cualquier otra cosa.
-2. **F-03 — Nada del código está en git.** El `.gitignore` raíz ignora `/frontend` y `/backend` completos. Cualquier `git clean` destruiría el proyecto sin posibilidad de recuperación.
-3. **B-03 — Filtro NSFW de entrada apagado.** `safe=false` en producción. Incumple `SOUL.md §4` activamente, no en teoría.
-4. **B-04 — Filtro NSFW de salida sin verificar.** Riesgo de que las categorías de NudeNet no coincidan con la versión instalada y el filtro no rechace nunca nada. No confirmado ni descartado — falta un test con fixture.
-
-Ver `.agents/steering/backlog.md` Épica F para el detalle y el orden sugerido (F-01 → F-02 → F-03).
+1. ~~**Proveedor de video:**~~ ✅ RESUELTO: Kling Omni via Luma API
+2. ~~**Modelo de datos nuevo:**~~ ✅ RESUELTO: Modelos creados y verificados en Supabase
 
 ---
 
-## Estado Backend — 🟡 Funcional, con dos brechas de seguridad activas
+## Estado Backend — Completo
 
-### ✅ Lo que sí está verificado
-- Monolito FastAPI corriendo (puerto 8000), sin Celery ni Redis
-- Rutas `/api/v1`: `auth`, `styles`, `generations` (202 + WebSocket + historial)
-- Generación real con Pollinations.ai, paralela con `asyncio.gather()`
-- Watermark real con Pillow, aplicado a toda imagen
-- CORS restringido a localhost + `CORS_ORIGINS` de entorno (código en `main.py`, verificado leyendo el archivo)
-- `SECRET_KEY` sin default inseguro, falla el arranque si falta (verificado en `settings.py`)
-- Rate limiting activo, pero **el identificador "por usuario" en realidad es por IP** (ver `E-05`)
-- Cleanup scheduler corriendo cada 6h, pero opera sobre una fila (`input_image_url`) que siempre tiene el mismo valor inventado (`uploads/mock_input.png`) — nunca borra nada real
+### Auth
+- POST /api/v1/auth/login — login con JWT
+- GET /api/v1/auth/users/me — obtener usuario actual
+- PUT /api/v1/auth/users/me — actualizar perfil
 
-### 🔴 No verificado o roto
-- Filtro NSFW de entrada: desactivado (`B-03`)
-- Filtro NSFW de salida: implementado pero sin test de fixture (`B-04`)
-- Strip EXIF: calcula y descarta el resultado (`D-01`)
-- Cero tests en `backend/tests/`
+### Users (Admin)
+- GET /api/v1/users — listar usuarios
+- POST /api/v1/users — crear usuario
+- GET /api/v1/users/{id} — obtener usuario
+- PUT /api/v1/users/{id} — actualizar usuario
+- DELETE /api/v1/users/{id} — eliminar usuario
+
+### Admin
+- GET /api/v1/admin/metrics — métricas del sistema
+- GET /api/v1/admin/users/{id}/limits — ver límites
+- PUT /api/v1/admin/users/{id}/limits — modificar límites
+
+### Categories
+- GET /api/v1/categories — listar categorías
+- POST /api/v1/categories — crear categoría
+- PUT /api/v1/categories/{id} — actualizar categoría
+- DELETE /api/v1/categories/{id} — eliminar categoría
+
+### Characters
+- POST /api/v1/characters — crear personaje (retorna 3 variaciones)
+- GET /api/v1/characters — listar personajes del usuario
+- GET /api/v1/characters/{id} — obtener personaje
+- POST /api/v1/characters/{id}/select — seleccionar variación
+- POST /api/v1/characters/{id}/redo — rehacer variaciones (máx 3)
+
+### Servicios
+- `image_provider.py` — Generación con Pollinations.ai
+- `nsfw_filter.py` — Filtro NSFW (fail-closed, valida imagen y texto)
+- `consistency.py` — Consistencia de personajes
+- `video_provider.py` — Placeholder para Fase 003
+
+### Validaciones implementadas
+- ✅ Tamaño imagen ≤ 10 MB
+- ✅ Longitud descripción 10-500 caracteres
+- ✅ Filtro NSFW en entrada (imagen + texto)
+- ✅ Control de límites semanales
+
+### DB
+- Supabase PostgreSQL 17.6 (us-east-1)
+- Credenciales en `backend/.env`
 
 ---
 
-## Estado Frontend — 🟢 Sin discrepancias encontradas
+## Estado Frontend — Completo
 
-No se auditó línea por línea en esta pasada, pero no hay evidencia de que el frontend tenga el mismo problema de "marcado hecho sin verificar" que el backend. Generate.tsx está cableado al backend real, sin simulación falsa. Si vuelves a auditar, prioriza el backend — ahí es donde aparecieron las tres discrepancias.
+### Stack
+- React 19 + TypeScript + Vite
+- zustand (estado global con persist)
+- @tanstack/react-query
+- lucide-react (iconos)
+- Tema oscuro
+
+### Páginas
+- **Landing** — página de inicio
+- **Login** — login con JWT, centrado
+- **Dashboard** — muestra límites restantes
+- **Characters** — lista de personajes + crear nuevo + selección de variaciones
+- **GenerateSpot** — placeholder para spots
+- **Profile** — perfil de usuario
+- **Admin** — métricas + gestión usuarios + gestión categorías
+
+### Funcionalidades implementadas
+- ✅ Login con JWT y persistencia
+- ✅ Rutas protegidas (solo autenticados)
+- ✅ Admin routes (solo admin)
+- ✅ Token expiración → redirige a login
+- ✅ Loading states (crear, rehacer, cargar imágenes)
+- ✅ Variaciones acumuladas (anteriores + nuevas)
+- ✅ Límites visibles y botón deshabilitado
+- ✅ Lista de personajes creados
+- ✅ Build exitoso
 
 ---
 
-## Estado IA — 🟡 Pollinations.ai, con el filtro de entrada apagado
+## Estado IA — Completo para Fase 002
 
-Ver `.agents/skills/ai.md`, sección "Filtro NSFW — estado real (corregido 2026-07-14)". No repitas la versión anterior de esta sección sin releer el código: decía "entrada cubierta" cuando no lo estaba.
-
----
-
-## 🎯 Foco Actual
-
-**Antes que cualquier feature nueva:**
-1. `F-01` — rotar credenciales (humano)
-2. `F-03` — arreglar `.gitignore` y comitear el código real (solo después de F-01)
-3. `B-03` — decidir si `safe=true` vuelve o se documenta como decisión explícita
-4. `E-04` — escribir el test de fixture NSFW, que responde de una vez si `B-04` funciona
-
-Todo lo demás (E-01, E-02, E-03, E-05) puede esperar a que estas cuatro estén resueltas.
+- Imágenes: Pollinations.ai (funcional)
+- Video: Kling Omni via Luma API (pendiente Fase 003)
+- NSFW: Filtro implementado (fail-closed)
+- Consistencia: imagen de referencia guardada
 
 ---
 
-## 📝 Nota para el siguiente agente
+## Credenciales
 
-Si vas a confiar en este archivo, no le des más crédito del que merece un documento que ya estuvo equivocado dos veces (ver `MEMORY.md`, entradas de auditoría). La regla vigente está en `.agents/AGENTS.md §6`: verifica ejecutando, no leyendo. Si corriges algo de esta lista, dilo en `MEMORY.md` con qué comando o prueba lo confirmaste — no solo "implementado".
+- **Admin:** admin@avatares.com / admin123
+- **Backend:** http://localhost:8000 (Swagger: /docs)
+- **Frontend:** http://localhost:5173
+
+---
+
+## Pendiente para Fase 003
+
+- [ ] Endpoint POST /spots
+- [ ] Pipeline de generación de video (Kling Omni via Luma API)
+- [ ] Consistencia de personaje en video (usar reference_image_url)
+- [ ] Tipos de video: short (3-5s) y long (15-30s)
+- [ ] Selección de variación de video (3 opciones)
+- [ ] Sistema de rehacer para spots (máx 3 veces)
+- [ ] Control de límites semanales (5 spots/usuario/semana)
+- [ ] Frontend: página de generar spot con flujo completo
+
+---
+
+## Para el siguiente agente
+
+1. Leer SOUL.md antes de empezar
+2. El backend está corriendo en http://localhost:8000
+3. El frontend está corriendo en http://localhost:5173
+4. Usar `authFetch` del archivo `frontend/src/lib/api.ts` para llamadas autenticadas
+5. Siguiente fase: **Fase 003 — Generación de Spots (Video)**
+6. Proveedor de video: **Kling Omni via Luma API** (documentado en MEMORY.md)

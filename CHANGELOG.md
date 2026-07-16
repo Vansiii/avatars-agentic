@@ -1,117 +1,86 @@
-# Changelog — Avatars Agentic
+# Changelog — TV Characters System
 
 Registro de cambios importantes en la documentación y estructura del sistema multi-agente.
 
 ---
 
+## [3.0.0] - 2026-07-14
+
+### Pivote Completo del Producto
+
+#### Nuevo Producto
+- **CAMBIADO**: De "Sistema de Avatares" a "Sistema de Personajes para Spots de TV"
+- Personajes hiperrealistas para spots publicitarios de televisión
+- Consistencia de personaje en todos los spots de una categoría
+- Generación de video (corto 3-5s / largo 15-30s)
+
+#### Roles
+- **CAMBIADO**: De free/pro/enterprise a admin/user
+- Admin crea usuarios (no hay registro público)
+- Usuario crea personajes y genera spots
+
+#### Límites de Negocio
+- **NUEVO**: 2 personajes por semana
+- **NUEVO**: 5 spots por semana
+- **NUEVO**: Rehacer 3 veces gratis (no consume crédito)
+
+#### Estilo
+- **CAMBIADO**: De múltiples estilos a solo hiperrealista
+
+### Archivos Modificados
+
+```
+✏️  .agents/memory/SOUL.md (reescrito: 8 secciones)
+✏️  .agents/AGENTS.md (reescrito: 8 secciones)
+✏️  .agents/skills/frontend.md (actualizado)
+✏️  .agents/skills/backend.md (actualizado)
+✏️  .agents/skills/ai.md (actualizado)
+✏️  .claude/agents/avatar-backend.md → tv-characters-backend.md
+✏️  .claude/agents/avatar-frontend.md → tv-characters-frontend.md
+✏️  .claude/agents/avatar-ai-pipeline.md → tv-characters-pipeline.md
+✏️  spec/mision.md (reescrito)
+✏️  spec/constitucion.md (reescrito)
+✏️  spec/sdd.md (reescrito)
+✏️  spec/roadmap.md (reescrito: 4 fases)
+✏️  spec/features/feature-001.md (reemplazado: creación de personajes)
+✏️  spec/features/feature-002.md (reemplazado: generación de spots)
+✏️  spec/features/feature-003.md (reemplazado: gestión de personajes)
+✏️  spec/features/feature-004.md (reemplazado: gestión de usuarios)
+✏️  spec/features/feature-005.md (reemplazado: categorías de spots)
+✏️  .agents/memory/HEARTBEAT.md (reemplazado)
+✏️  .agents/memory/MEMORY.md (reemplazado)
+✏️  .agents/steering/backlog.md (reemplazado)
+✏️  README.md (reescrito)
+✏️  CHANGELOG.md (este archivo)
+```
+
+### Próximos Pasos
+
+1. Definir proveedor de video para testing
+2. Crear estructura de base de datos nueva
+3. Implementar Fase 001 (base del sistema)
+
+---
+
 ## [2.0.0] - 2026-07-13
 
-### ✅ Correcciones Mayores (Post-Auditoría)
-
-#### Arquitectura
-- **CORREGIDO**: Inconsistencia entre documentación y código real
-  - `SDD.md` actualizado a v2.0: monolito FastAPI como arquitectura oficial
-  - `SOUL.md` §6 prohíbe explícitamente Celery/Redis/microservicios en Alpha
-  - `roadmap.md` hito 2.1 actualizado: BackgroundTasks en lugar de Celery
-  - `feature-001.md` actualizado a v1.1 con dependencias reales
-
-#### Sistema de Memoria Compartida
-- **IMPLEMENTADO**: Protocolo de memoria entre agentes
-  - `.agents/memory/SOUL.md` creado con 6 secciones de reglas inmutables
-  - `.agents/memory/HEARTBEAT.md` para estado actual (se sobrescribe)
-  - `.agents/memory/MEMORY.md` para historial (append-only)
-  - Protocolo documentado en `AGENTS.md` y `agent.md`
-
-#### Documentación
-- **CREADO**: `README.md` principal del proyecto (162 líneas)
-  - Explica qué es el sistema multi-agente
-  - Documenta arquitectura y protocolo de trabajo
-  - Lista roles, reglas inmutables y estado actual
-  - Referencia a todos los documentos clave
-
-- **ACTUALIZADO**: `informe_estructura_avatares.md` v1.1
-  - Marcado como "correcciones aplicadas"
-  - Sección final con estado de implementación
-  - Métricas de mejora documentadas
-
-### 🔧 Cambios Técnicos Reflejados
-
-- ✅ Proveedor de IA: Pollinations.ai (no Replicate/Gemini)
-- ✅ Cola de tareas: BackgroundTasks de FastAPI (no Celery + Redis)
-- ✅ Watermark: Implementado con Pillow y verificado
-- ✅ Filtro NSFW entrada: Activo vía `safe=true` de Pollinations
-- ❌ Filtro NSFW salida: Pendiente (bloqueante B-04)
-
-### 📊 Estado del Backlog
-
-**Épica A (Fundaciones)**: ✅ 8/8 completadas  
-**Épica B (IA Real)**: 🟡 7/9 completadas (B-04 bloqueante crítico)  
-**Épica C (Frontend)**: 🔴 0/8 completadas (C-08 bug crítico)  
-**Épica D (Seguridad)**: 🔴 0/5 completadas  
-**Épica E (Cierre Alpha)**: 🔴 0/3 completadas  
-
-### 📝 Archivos Modificados
-
-```
-✏️  spec/roadmap.md (hitos 2.1, 2.2, checklist fase 002)
-✏️  spec/features/feature-001.md (v1.1, AC actualizados, dependencias)
-✏️  informe_estructura_avatares.md (v1.1, estado de correcciones)
-➕  README.md (nuevo)
-➕  CHANGELOG.md (nuevo, este archivo)
-```
-
-### 📚 Documentación de Referencia Actualizada
-
-Todos los documentos ahora están **100% consistentes**:
-- `SOUL.md` ← fuente de verdad de reglas técnicas
-- `constitucion.md` ← fuente de verdad de principios de negocio
-- `SDD.md` v2.0 ← arquitectura técnica real
-- `roadmap.md` + `backlog.md` ← tareas actuales (backlog manda)
+### Correcciones Mayores (Post-Auditoría)
+- Sobreingeniería arquitectónica corregida
+- Sistema de memoria compartida implementado
+- Proveedor de IA: Pollinations.ai (no Replicate)
+- BackgroundTasks (no Celery/Redis)
 
 ---
 
-## [1.0.0] - 2026-07-08 (Estado Pre-Auditoría)
+## [1.0.0] - 2026-07-08
 
 ### Estado Original
-
-- ❌ Documentación pedía microservicios + Celery + Redis
-- ❌ Código real era monolito FastAPI simple
-- ❌ Sin sistema de memoria compartida entre agentes
-- ❌ Generación de avatares era un mock con Unsplash
-- ⚠️ Inconsistencias entre `roadmap.md`, `SDD.md` y código
-
-### Archivos Creados Inicialmente
-
-```
-spec/
-├── mision.md
-├── constitucion.md
-├── sdd.md (v1.0, arquitectura idealizada)
-├── roadmap.md (fases con Celery/Redis)
-└── features/ (5 features definidas)
-
-agent.md (definición de 10 roles)
-```
-
----
-
-## Notas de Versión
-
-### Principios de Versionado
-
-- **Major (X.0.0)**: Cambios en arquitectura o protocolo de agentes
-- **Minor (x.X.0)**: Nuevas features o correcciones significativas
-- **Patch (x.x.X)**: Correcciones menores o actualizaciones de documentación
-
-### Próxima Versión Planificada: [2.1.0]
-
-Cuando se complete:
-- Filtro NSFW de salida (B-04)
-- Bug C-08 de simulación de imágenes
-- Strip de EXIF (D-01)
-- Épica C completada (frontend funcional E2E)
+- Documentación con microservicios + Celery + Redis
+- Código real era monolito FastAPI simple
+- Sin memoria compartida entre agentes
+- Generación de avatares era un mock
 
 ---
 
 **Mantenedores**: Sistema Multi-Agente  
-**Última actualización**: 2026-07-13
+**Última actualización**: 2026-07-14

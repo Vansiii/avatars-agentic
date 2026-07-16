@@ -17,7 +17,7 @@ Eres el dueño de la interfaz. Tu trabajo vive en `frontend/`.
 - Datos del servidor: **@tanstack/react-query**
 - Iconos: `lucide-react`
 - Lint: `oxlint` (`npm run lint`)
-- Estilos: **CSS global** (`src/App.css`, `src/index.css`). Ojo: las specs viejas mencionan CSS Modules — no es lo que hay. Manda el código.
+- Estilos: **CSS global** (`src/App.css`, `src/index.css`)
 
 ## Mapa del código
 
@@ -27,42 +27,52 @@ frontend/src/
 ├── App.tsx
 ├── store.ts                      # zustand: sesión / usuario
 ├── components/DashboardLayout.tsx
-├── pages/  Landing · Login · Register · Dashboard · Generate · Profile
+├── pages/  Landing · Login · Dashboard · Characters · GenerateSpot · Profile
 └── App.css · index.css
 ```
 
 ## Reglas de división de responsabilidad
 
-- **zustand** para estado del cliente que persiste entre páginas: token JWT, usuario, plan y créditos.
-- **react-query** para todo lo que venga del servidor: catálogo de estilos, historial, envío de generación. No copies respuestas del servidor dentro de zustand: duplicas la verdad y se desincroniza.
+- **zustand** para estado del cliente que persiste entre páginas: token JWT, usuario, rol.
+- **react-query** para todo lo que venga del servidor: personajes, spots, generación.
 - El **token JWT** se manda en `Authorization: Bearer <token>` en cada petición autenticada.
 - Todos los textos de la interfaz **en español**.
 
 ## Reglas de negocio visibles en el UI
 
-Vienen de `SOUL.md`. El UI las *refleja*, **nunca las hace cumplir por sí solo** — la autoridad es el backend:
+Vienen de `SOUL.md`. El UI las *refleja*, **nunca las hace cumplir por sí solo**:
 
-1. **Créditos:** muestra `credits_used / credits_limit`. Con 0 créditos disponibles, deshabilita el botón de generar y enseña un CTA de upgrade. Aun así, gestiona el **403 `GEN_003`** que puede llegar de todas formas.
-2. **Estilos bloqueados:** un estilo con `tier_required` por encima del plan del usuario se muestra con overlay de upgrade y no es seleccionable. Si el backend responde 403, muéstralo, no lo ocultes.
-3. **Watermark:** es una marca **grabada en la imagen por el backend**. Nunca simules un watermark con CSS ni con un `<div>` superpuesto: se quita con DevTools y sería una violación de `SOUL.md §3`.
-4. **Rechazo NSFW (422 `GEN_004`):** muestra un mensaje neutro y respetuoso. No detalles qué se detectó.
-5. **Validaciones de entrada** (≤ 10 MB, JPEG/PNG/WEBP, prompt de 10–500 caracteres, 3–6 variaciones): valida en el cliente para dar feedback rápido, **y aun así maneja el error del servidor**. La validación del cliente es cortesía, no seguridad.
+1. **Límites semanales:** muestra cuántos personajes y spots quedan esta semana. Con 0 disponibles, deshabilita el botón de crear/generar.
+2. **Rehacer:** cuando hay 3 variaciones, muestra botón "Rehacer" (máx 3 veces) y botón "Elegir". Solo al elegir se decrementa el límite.
+3. **Filtro NSFW (422 `GEN_004`):** muestra un mensaje neutro y respetuoso. No detalles qué se detectó.
+4. **Validaciones de entrada** (≤ 10 MB, JPEG/PNG/WEBP, prompt de 10–500 caracteres): valida en el cliente para dar feedback rápido, **y aun así maneja el error del servidor**.
+5. **Roles:** el admin ve gestión de usuarios; el usuario final ve personajes y spots.
 
-## Flujo de generación (el corazón del Alpha)
+## Flujo de creación de personaje
 
 ```
-1. POST /api/v1/generations  (multipart: style_id, prompt?, variations, notes?, file?)
-   → 202 { data: { request_id, estimated_seconds, websocket_channel } }
-2. Abrir WebSocket en  ws://localhost:8000/api/v1/ws/generations/{request_id}
-3. Escuchar eventos:
-     generation_progress  → { progress: 20|50|80, message }  → barra de progreso
-     generation_completed → { avatars[], credits_remaining }  → mostrar la galería
-     generation_failed    → { message }                       → mostrar error + reintentar
-4. Cerrar el WebSocket al completar, al fallar y al desmontar el componente.
+1. POST /api/v1/characters  (multipart: prompt?, file?, name, category)
+   → 202 { data: { character_id, estimated_seconds } }
+2. Escuchar WebSocket o polling para progreso
+3. Recibir 3 variaciones de imagen del personaje
+4. Usuario elige una → POST /api/v1/characters/{id}/select  (variation_index)
+   → 200 { data: { character_id, selected: true } }
+5. Si no le gusta → POST /api/v1/characters/{id}/redo
+   → 202 { data: { variations[], redos_remaining } }
 ```
-- **Nunca hagas polling.** El WebSocket existe precisamente para eso.
-- Cierra siempre el socket en el cleanup del `useEffect`: si no, se acumulan conexiones colgadas.
-- Refresca los créditos con el `credits_remaining` que llega en `generation_completed`.
+
+## Flujo de generación de spot (video)
+
+```
+1. POST /api/v1/spots  (character_id, type: short|long, script)
+   → 202 { data: { spot_id, estimated_seconds } }
+2. Escuchar WebSocket para progreso
+3. Recibir 3 variaciones de video
+4. Usuario elige una → POST /api/v1/spots/{id}/select  (variation_index)
+   → 200 { data: { spot_id, selected: true } }
+5. Si no le gusta → POST /api/v1/spots/{id}/redo
+   → 202 { data: { variations[], redos_remaining } }
+```
 
 ## Cómo verificar tu trabajo
 
@@ -72,4 +82,4 @@ npm run dev     # Vite
 npm run build   # tsc -b && vite build  — DEBE compilar sin errores de tipos
 npm run lint
 ```
-Con el backend levantado en `:8000`, **recorre el flujo en el navegador de verdad**: login → elegir estilo → generar → ver progreso → ver los avatares → mirar el historial. Una tarea de UI no está hecha hasta que la has visto funcionar.
+Con el backend levantado en `:8000`, **recorre el flujo en el navegador de verdad**: login → crear personaje → elegir variación → generar spot → ver video. Una tarea de UI no está hecha hasta que la has visto funcionar.

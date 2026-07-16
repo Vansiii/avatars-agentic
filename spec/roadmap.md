@@ -1,252 +1,127 @@
 # Hoja de Ruta de Implementación
-## Sistema de Creación de Identidades Visuales Digitales
+## Sistema de Personajes para Spots Publicitarios de TV
 
-> **Última actualización:** 2026-07-13  
-> **Cambios recientes:** Hitos 2.1 y 2.2 actualizados para reflejar implementación real (BackgroundTasks + Pollinations.ai), no la arquitectura inicial sobrediseñada (Celery/Redis + Replicate).
-
-> **Nota:** La progresión es estrictamente secuencial; no se permite el inicio de una fase sin la validación exitosa de la anterior mediante el checklist de cierre correspondiente.
-
-> ⚠️ **Importante:** Este roadmap debe leerse junto con `SOUL.md §6` y `.agents/steering/backlog.md`. El backlog es más específico y manda sobre este documento en caso de conflicto.
+> **Última actualización:** 2026-07-14  
+> **Versión:** 2.0
 
 ---
 
-## Visión General del Roadmap
+## Visión General
 
 ```
-FASE 001  ──►  FASE 002  ──►  FASE 003  ──►  FASE 004  ──►  FASE 005
- Entorno         IA Core        Negocio       Persistencia    Expansión
-  Base           & UI           & Pagos        & Trazabilidad   B2B
- (Mes 1)      (Mes 1-2)       (Mes 2-3)       (Mes 3-4)      (Mes 5-8)
+FASE 001  ──►  FASE 002  ──►  FASE 003  ──►  FASE 004
+  Base            Personaje       Video          Producción
+  (Sem 1-2)       (Sem 2-4)       (Sem 4-6)      (Sem 6-8)
 ```
 
 ---
 
-## Fase 001: Configuración de Entorno Base e Interfaz de Usuario Mínima
+## Fase 001: Base del Sistema
 
-> **Duración estimada:** 3–4 semanas  
-> **Estado:** 🔧 En desarrollo
-
-### Objetivo
-Establecer la infraestructura técnica fundacional y una interfaz funcional básica que permita a un usuario autenticarse y navegar por la plataforma.
+> **Duración:** 2 semanas  
+> **Estado:** Planificado
 
 ### Hitos
 
-| # | Hito | Feature Asociado | Criterio de Done |
-|---|---|---|---|
-| 1.1 | Repositorio, CI/CD y entornos (dev/staging/prod) | — | Pipeline de GitHub Actions verde en los 3 entornos |
-| 1.2 | Contenerización con Docker + Docker Compose | — | `docker-compose up` levanta todos los servicios sin error |
-| 1.3 | Base de datos PostgreSQL + migraciones Alembic | [FEAT-004](./features/user-management.md) | Migraciones corren sin conflictos en entorno limpio |
-| 1.4 | Servicio de autenticación (registro, login, JWT) | [FEAT-004](./features/user-management.md) | Tests de integración auth pasan al 100% |
-| 1.5 | Frontend: estructura PWA (React + Vite + rutas) | — | App carga en <2s, routing funcional |
-| 1.6 | Pantallas base: Landing, Login, Registro, Dashboard vacío | [FEAT-004](./features/user-management.md) | Flujo registro → login → dashboard sin errores |
-| 1.7 | Gestión de perfil de usuario | [FEAT-004](./features/user-management.md) | Usuario puede editar nombre y foto de perfil |
-
-### Checklist de Cierre de Fase 001
-- [ ] Todos los servicios Docker arrancan sin intervención manual
-- [ ] El flujo completo Registro → Verificación de email → Login → Dashboard funciona
-- [ ] Los tests de integración de autenticación pasan al 100%
-- [ ] El frontend está desplegado en el entorno de staging
-- [ ] La documentación de API (`/docs`) está accesible y actualizada
-- [ ] El Tech Lead ha revisado y aprobado la arquitectura base
-
----
-
-## Fase 002: Integración con Servicios Externos de Procesamiento (IA / Imagen)
-
-> **Duración estimada:** 4–5 semanas  
-> **Estado:** 📋 Planificado  
-> **Prerequisito:** ✅ Cierre de Fase 001
-
-### Objetivo
-Implementar el pipeline central de generación de avatares con IA y exponer al usuario la experiencia completa de subir una foto, elegir un estilo y recibir resultados.
-
-### Hitos
-
-| # | Hito | Feature Asociado | Criterio de Done |
-|---|---|---|---|
-| 2.1 | ~~Cola de tareas asíncronas (Celery + Redis)~~ → **Ya implementado con BackgroundTasks de FastAPI** (monolito Alpha) | [FEAT-001](./features/avatar-generation.md) | ✅ Generación asíncrona funcional con BackgroundTasks |
-| 2.2 | Integración con proveedor de IA (~~Replicate API~~ → **Pollinations.ai**) | [FEAT-001](./features/avatar-generation.md) | ✅ Generación de imagen real exitosa con Pollinations |
-| 2.3 | Pre-procesado de imagen de entrada (resize, EXIF strip, filtro NSFW) | [FEAT-001](./features/avatar-generation.md) | Imágenes NSFW son rechazadas; imágenes válidas se normalizan |
-| 2.4 | Post-procesado: upscaling (ESRGAN) y watermark en tier free | [FEAT-001](./features/avatar-generation.md) | Avatares free tienen watermark; pro, no |
-| 2.5 | Almacenamiento de resultados en Blob Storage (S3/GCS) + CDN | [FEAT-001](./features/avatar-generation.md) | URLs de avatares accesibles via CDN en <200ms |
-| 2.6 | Notificación de resultados via WebSocket | [FEAT-001](./features/avatar-generation.md) | El cliente recibe el evento `generation_completed` sin polling |
-| 2.7 | Catálogo de estilos: seed de 9 estilos MVP | [FEAT-003](./features/style-catalog.md) | Galería de estilos visible y seleccionable en frontend |
-| 2.8 | Flujo completo de generación en UI: upload → estilo → resultados → descarga | [FEAT-001](./features/avatar-generation.md) | E2E test de generación pasa en staging |
-| 2.9 | Limpieza automática de imágenes de entrada (job cron a las 24h) | [FEAT-001](./features/avatar-generation.md) | Imágenes de entrada son eliminadas pasadas 24h |
-
-### Checklist de Cierre de Fase 002
-- [x] **2.1 completado**: BackgroundTasks de FastAPI implementado (no Celery/Redis, según SOUL.md §6)
-- [x] **2.2 completado**: Pollinations.ai integrado con generación real verificada
-- [x] **2.4 parcial**: Watermark real con Pillow implementado y verificado
-- [x] **2.6 completado**: WebSocket de progreso funcional
-- [x] **2.7 completado**: Catálogo de estilos con seed implementado
-- [ ] **2.3 pendiente**: Filtro NSFW de entrada ✅ (implementado) | Filtro NSFW de salida ❌ (bloqueante)
-- [ ] **2.4 pendiente**: Post-procesado completo (upscaling pendiente)
-- [ ] **2.5 pendiente**: Blob Storage real (hoy usa almacenamiento local)
-- [ ] **2.8 pendiente**: Flujo E2E completo en UI (C-01 a C-08 del backlog)
-- [ ] **2.9 pendiente**: Job cron de limpieza de imágenes de entrada (24h)
-
----
-
-## Fase 003: Lógica de Negocio y Protocolos de Gestión de Errores
-
-> **Duración estimada:** 4–5 semanas  
-> **Estado:** 📋 Planificado  
-> **Prerequisito:** ✅ Cierre de Fase 002
-
-### Objetivo
-Implementar el sistema de monetización (planes, créditos, suscripciones), reforzar la gestión de errores en todos los flujos críticos y añadir los estilos premium del catálogo.
-
-### Hitos
-
-| # | Hito | Feature Asociado | Criterio de Done |
-|---|---|---|---|
-| 3.1 | Sistema de créditos por usuario (cuota, descuento, recarga mensual) | [FEAT-002](./features/subscriptions.md) | Los créditos se decrementan al completar; se recargan el día 1 del mes |
-| 3.2 | Planes de suscripción: Free, Pro, Enterprise (definición en DB) | [FEAT-002](./features/subscriptions.md) | Los 3 planes están en DB con sus límites correctos |
-| 3.3 | Integración con Stripe Checkout (pago de suscripción) | [FEAT-002](./features/subscriptions.md) | Un pago de prueba en modo test activa el plan en < 30s |
-| 3.4 | Webhooks de Stripe (payment_succeeded, payment_failed, subscription.deleted) | [FEAT-002](./features/subscriptions.md) | Los 3 eventos de webhook actualizan el estado del plan correctamente |
-| 3.5 | Portal de gestión de suscripción (Stripe Customer Portal) | [FEAT-002](./features/subscriptions.md) | Usuario puede cancelar, cambiar plan y ver facturas |
-| 3.6 | Bloqueo de generación por cuota agotada + CTA de upgrade | [FEAT-002](./features/subscriptions.md) | Al llegar a 0 créditos, el botón de generar se deshabilita con CTA |
-| 3.7 | Email de alerta al 20% de créditos restantes | [FEAT-002](./features/subscriptions.md) | Email recibido en prueba cuando quedan ≤ 1 crédito de 5 |
-| 3.8 | Gestión de errores global: retry automático, dead-letter queue | [FEAT-001](./features/avatar-generation.md) | Jobs fallidos se reintentan 3 veces; luego van a DLQ con log |
-| 3.9 | Rate limiting por usuario e IP en todos los endpoints | — | Más de 20 req/min por usuario devuelve 429 |
-| 3.10 | Estilos Pro y Enterprise en catálogo (20+ estilos totales) | [FEAT-003](./features/style-catalog.md) | Los estilos bloqueados muestran overlay de upgrade |
-
-### Checklist de Cierre de Fase 003
-- [ ] Un flujo completo Free→Pro (pago Stripe en modo test) funciona de extremo a extremo
-- [ ] Los webhooks de Stripe están verificados con firma correcta
-- [ ] Los jobs fallidos se gestionan con retry + DLQ y no descuentan crédito
-- [ ] El rate limiting está activo y retorna 429 con `Retry-After` header
-- [ ] Los emails transaccionales (bienvenida, créditos bajos, factura) se envían correctamente
-- [ ] El panel de billing está funcional en staging
-
----
-
-## Fase 004: Capa de Persistencia y Trazabilidad Histórica
-
-> **Duración estimada:** 3–4 semanas  
-> **Estado:** 📋 Planificado  
-> **Prerequisito:** ✅ Cierre de Fase 003
-
-### Objetivo
-Garantizar que el usuario tenga acceso permanente a su historial de generaciones, implementar el cumplimiento de privacidad (GDPR/LGPD) y establecer un sistema de observabilidad completo para producción.
-
-### Hitos
-
-| # | Hito | Feature Asociado | Criterio de Done |
-|---|---|---|---|
-| 4.1 | Historial de generaciones paginado con thumbnails | [FEAT-004](./features/user-management.md) | Historial carga en < 500ms con paginación de 20 items |
-| 4.2 | Retención diferenciada: 30 días (free) vs. permanente (pro/enterprise) | [FEAT-004](./features/user-management.md) | Job cron elimina correctamente avatares expirados |
-| 4.3 | Re-descarga de avatares desde el historial | [FEAT-004](./features/user-management.md) | URLs de descarga desde historial funcionan mientras el avatar está vigente |
-| 4.4 | Exportación de datos del usuario (JSON + ZIP) | [FEAT-004](./features/user-management.md) | Exportación se genera asíncronamente y llega por email en < 10 min |
-| 4.5 | Eliminación de cuenta permanente | [FEAT-004](./features/user-management.md) | Todos los datos, imágenes y avatares son eliminados y verificados |
-| 4.6 | Logs estructurados (JSON) en todos los servicios | — | Logs consultables en Loki/Grafana en staging |
-| 4.7 | Métricas de aplicación (Prometheus + Grafana) | — | Dashboard con: latencia P95, tasa de error, jobs en cola, uso de créditos |
-| 4.8 | Alertas de monitoreo (SLA 99.5%, errores > 5%) | — | Alertas configuradas y testeadas en staging |
-| 4.9 | Log inmutable de seguridad (intentos NSFW, bans) | [FEAT-001](./features/avatar-generation.md) | Eventos de seguridad no pueden ser eliminados por ningún rol |
-| 4.10 | Pruebas de carga (k6): 100 usuarios concurrentes | — | El sistema mantiene < 2s de latencia P95 bajo carga |
-
-### Checklist de Cierre de Fase 004
-- [ ] El historial de generaciones es funcional y paginado
-- [ ] La eliminación de cuenta borra todos los artefactos del usuario (verificado en storage)
-- [ ] La exportación de datos cumple con el formato GDPR
-- [ ] Los dashboards de Grafana están operativos en producción
-- [ ] Las pruebas de carga con k6 pasan bajo 100 usuarios concurrentes
-- [ ] El SLA de 99.5% es alcanzable según las métricas de staging
-- [ ] **HITO: Primera versión de producción (v1.0) disponible para usuarios reales**
-
----
-
-## Fase 005: Expansión B2B y Funcionalidades Avanzadas
-
-> **Duración estimada:** 8–12 semanas  
-> **Estado:** 📋 Planificado (Ciclo 2)  
-> **Prerequisito:** ✅ Cierre de Fase 004 + v1.0 en producción estable por ≥ 2 semanas
-
-### Objetivo
-Implementar el módulo corporativo B2B, la generación masiva de avatares para empresas, la API pública y los primeros avatares animados.
-
-### Hitos
-
-| # | Hito | Feature Asociado | Criterio de Done |
-|---|---|---|---|
-| 5.1 | Módulo de Organizaciones (CRUD, miembros, roles) | [FEAT-005](./features/corporate-avatars.md) | Admin puede crear org, invitar miembros y asignar créditos |
-| 5.2 | Estilo corporativo personalizado (logo, paleta, fondos) | [FEAT-005](./features/corporate-avatars.md) | El estilo corporativo se aplica correctamente en la generación |
-| 5.3 | Generación masiva por importación CSV | [FEAT-005](./features/corporate-avatars.md) | CSV de 20 empleados genera todos los avatares en < 15 min |
-| 5.4 | Descarga masiva en ZIP por organización | [FEAT-005](./features/corporate-avatars.md) | ZIP se genera y descarga correctamente con estructura por empleado |
-| 5.5 | Panel de administración de organización | [FEAT-005](./features/corporate-avatars.md) | Dashboard con uso de créditos, miembros y generaciones recientes |
-| 5.6 | API pública con autenticación por API Key | — | Documentación OpenAPI publicada; cliente de prueba funcional |
-| 5.7 | 30+ estilos en catálogo incluyendo estilos exclusivos Enterprise | [FEAT-003](./features/style-catalog.md) | Nuevos estilos disponibles y testeados en generación |
-| 5.8 | Avatares animados: exportación en GIF y WebM | FEAT-006 (futuro) | Generación de avatar animado de 3s en resolución 512×512 |
-| 5.9 | App móvil PWA mejorada (installable, push notifications) | — | App instalable desde Chrome/Safari con notificaciones push |
-
-### Checklist de Cierre de Fase 005
-- [ ] El módulo B2B pasa los criterios de aceptación de FEAT-005 al 100%
-- [ ] La API pública tiene documentación completa y ejemplos de código
-- [ ] Los avatares animados pasan el filtro NSFW en post-procesado
-- [ ] El tiempo de generación masiva para 50 empleados es < 20 minutos
-- [ ] NPS de usuarios Enterprise en beta es > 50
-
----
-
-## Especificaciones de Funcionalidad (`/spec/features`)
-
-Cada hito del roadmap tiene su correspondiente archivo de especificación detallada. Estructura estándar de una especificación de feature:
-
-```markdown
-# Feature Spec: [Nombre del Feature]
-
-> ID: FEAT-XXX
-> Versión: X.X
-> Estado: [Planificado | En desarrollo | Completado]
-> Prioridad: [P0 Crítico | P1 Alta | P2 Media | P3 Baja]
-
-## Descripción
-[Qué hace este feature y por qué existe]
-
-## Criterios de Aceptación
-- [ ] AC-001: ...
-- [ ] AC-002: ...
-
-## Flujo de Usuario
-[Diagrama o descripción paso a paso]
-
-## Especificaciones Técnicas
-[Endpoints, modelos de datos, eventos]
-
-## Casos de Error
-[Tabla de códigos de error y mensajes]
-
-## Métricas de Éxito
-[KPIs esperados post-lanzamiento]
-```
-
-### Índice de Features por Fase
-
-| Fase | Feature | Archivo |
+| # | Hito | Criterio de Done |
 |---|---|---|
-| 001 | Gestión de Usuarios y Perfiles | [features/user-management.md](./features/user-management.md) |
-| 002 | Generación de Avatares con IA | [features/avatar-generation.md](./features/avatar-generation.md) |
-| 002 | Catálogo de Estilos de Avatar | [features/style-catalog.md](./features/style-catalog.md) |
-| 003 | Sistema de Suscripciones y Créditos | [features/subscriptions.md](./features/subscriptions.md) |
-| 005 | Avatares Corporativos para Empresas | [features/corporate-avatars.md](./features/corporate-avatars.md) |
+| 1.1 | Setup de proyecto: FastAPI + React + PostgreSQL | `docker-compose up` levanta todo |
+| 1.2 | Auth: login/registro de admin, JWT | Admin puede loguearse |
+| 1.3 | Gestión de usuarios: admin crea usuarios | Admin crea usuario, usuario se loguea |
+| 1.4 | Modelos de datos: users, characters, spots | DB crea tablas correctamente |
+| 1.5 | Frontend: estructura PWA con rutas | App carga, routing funcional |
+
+### Checklist de Cierre
+- [ ] Flujo completo: admin crea usuario → usuario se loguea
+- [ ] DB crea todas las tablas
+- [ ] Frontend compila sin errores
 
 ---
 
-## Dependencias entre Fases
+## Fase 002: Creación de Personajes
 
-```
-FEAT-004 (Usuarios)
-    └──► FEAT-001 (Generación IA)  ──► FEAT-002 (Suscripciones)
-              └──► FEAT-003 (Estilos)         └──► FEAT-005 (Corporativo)
-```
+> **Duración:** 2 semanas  
+> **Prerequisito:** Fase 001  
+> **Estado:** Planificado
 
-> Ninguna fase puede comenzar sin que sus dependencias estén en estado **Completado** y validadas por el Tech Lead.
+### Hitos
 
----
-
-## Control de Versiones del Roadmap
-
-| Versión | Fecha | Cambio |
+| # | Hito | Criterio de Done |
 |---|---|---|
-| 1.0 | 2026-07-08 | Versión inicial — 5 fases definidas |
+| 2.1 | Endpoint POST /characters (imagen +/o texto) | Personaje creado en DB |
+| 2.2 | Pipeline de generación de imagen con Pollinations | Se genera imagen hiperrealista |
+| 2.3 | Filtro NSFW en entrada y salida | Contenido NSFW rechazado |
+| 2.4 | Selección de variación (3 opciones) | Usuario elige variación |
+| 2.5 | Sistema de rehacer (3 veces) | Rehacer funciona, no decrementa límite |
+| 2.6 | Límites semanales (2 personajes) | 403 al alcanzar límite |
+| 2.7 | Frontend: página de crear personaje | UI funcional con flujo completo |
+| 2.8 | Consistencia: guardar reference_image_url | Personaje tiene imagen de referencia |
+
+### Checklist de Cierre
+- [ ] Flujo completo: crear → generar 3 variaciones → elegir → personaje guardado
+- [ ] Rehacer funciona (3 veces gratis)
+- [ ] Límite semanal se respeta
+- [ ] NSFW filtra correctamente
+
+---
+
+## Fase 003: Generación de Spots (Video)
+
+> **Duración:** 2 semanas  
+> **Prerequisito:** Fase 002  
+> **Estado:** Planificado
+
+### Hitos
+
+| # | Hito | Criterio de Done |
+|---|---|---|
+| 3.1 | Endpoint POST /spots (personaje + script + tipo) | Spot creado en DB |
+| 3.2 | Pipeline de generación de video | Se genera video del personaje |
+| 3.3 | Consistencia: personaje aparece en el video | El personaje se reconoce |
+| 3.4 | Tipos de video: short (3-5s) y long (15-30s) | Ambos tipos funcionan |
+| 3.5 | Selección de variación de video | Usuario elige variación |
+| 3.6 | Sistema de rehacer para spots | Rehacer funciona |
+| 3.7 | Límites semanales (5 spots) | 403 al alcanzar límite |
+| 3.8 | Frontend: página de generar spot | UI funcional |
+
+### Checklist de Cierre
+- [ ] Flujo completo: seleccionar personaje → describir spot → generar → elegir
+- [ ] Consistencia del personaje verificada
+- [ ] Ambos tipos de video funcionan
+- [ ] Límite semanal se respeta
+
+---
+
+## Fase 004: Cierre del Alpha
+
+> **Duración:** 2 semanas  
+> **Prerequisito:** Fase 003  
+> **Estado:** Planificado
+
+### Hitos
+
+| # | Hito | Criterio de Done |
+|---|---|---|
+| 4.1 | Gestión de personajes: editar, eliminar, reasignar | CRUD completo funcional |
+| 4.2 | Categorías de spots (deportes, noticias, etc.) | Categorías funcionan |
+| 4.3 | Dashboard con métricas de uso | Admin ve métricas |
+| 4.4 | Tests E2E | Flujo completo testeado |
+| 4.5 | README de arranque | Cómo levantar el sistema |
+
+### Checklist de Cierre
+- [ ] CRUD de personajes completo
+- [ ] Categorías funcionan
+- [ ] Tests pasan
+- [ ] README actualizado
+
+---
+
+## Features
+
+| ID | Feature | Fase | Estado |
+|---|---|---|---|
+| FEAT-001 | Creación de personajes | 002 | Planificado |
+| FEAT-002 | Generación de spots | 003 | Planificado |
+| FEAT-003 | Gestión de personajes | 004 | Planificado |
+| FEAT-004 | Gestión de usuarios | 001 | Planificado |
+| FEAT-005 | Categorías de spots | 004 | Planificado |
