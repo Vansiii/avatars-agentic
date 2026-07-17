@@ -22,6 +22,13 @@ Lee, en este orden:
 - Consistencia: usar `reference_image_url` del personaje en cada spot.
 - Prohibido: Celery, Redis, microservicios. Solo `BackgroundTasks`.
 
+## Definition of Done (todos deben cumplirse)
+
+- [ ] El endpoint responde el status y el schema documentados en `MEMORY.md`.
+- [ ] Los códigos de error de negocio salen con su `x-error-code` (`CHAR_001`, `VID_001`, `GEN_00x`).
+- [ ] Si cambiaste una request/response, anotaste el contrato nuevo en `MEMORY.md`.
+- [ ] Ejercitaste el camino real (abajo), no solo "importa sin error".
+
 ## Verificación
 
 Levanta el servidor, ejercita el endpoint real desde `/docs` o con `curl`. No declares hecha una tarea porque "se ve bien".

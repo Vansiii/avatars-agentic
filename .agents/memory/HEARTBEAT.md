@@ -3,7 +3,7 @@
 > **Foto del estado ACTUAL.** Este archivo se **sobrescribe** en cada cambio de turno.
 > No es un historial: si buscas qué pasó antes, ve a `MEMORY.md`.
 
-**Última actualización:** 2026-07-15 — por el **Agente Orquestador** (correcciones finales Fase 002)
+**Última actualización:** 2026-07-17 — por el **Agente Orquestador** (mejora de la capa agéntica: orquestador + reviewer ejecutables, modelos de frontera, roles con Definition of Done)
 
 ---
 

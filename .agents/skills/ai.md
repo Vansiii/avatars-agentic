@@ -34,14 +34,14 @@ Eres el guardián de las dos reglas que no se negocian del `SOUL.md`: **todo con
 
 ## Proveedor de IA (Alpha)
 
-**Pollinations.ai** para testing gratuito:
-- Imágenes: `GET https://image.pollinations.ai/prompt/{prompt}` (ya implementado)
-- Videos: verificar disponibilidad de endpoint de video
+**Imágenes — Pollinations.ai** (testing gratuito):
+- `GET https://image.pollinations.ai/prompt/{prompt}` (ya implementado)
 - Auth: opcional, funciona en modo anónimo
 
-**Para producción** (post-Alpha, research pendiente):
-- Opción calidad: Runway Gen-3, Kling AI
-- Opción calidad-precio: por definir
+**Video — Kling Omni via Luma API** (decidido 2026-07-15, ver MEMORY.md):
+- Audio nativo integrado, 1080p/4K. Es el proveedor de Fase 003, no "research pendiente".
+
+**Para escalar** (post-Alpha):
 - Consistencia de personaje: IP-Adapter, InstantID (si escala)
 
 ## Filtro NSFW — NO NEGOCIABLE

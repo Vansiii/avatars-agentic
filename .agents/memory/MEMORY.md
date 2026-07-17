@@ -363,3 +363,22 @@
 - Characters: POST/GET /api/v1/characters, POST /api/v1/characters/{id}/select, POST /api/v1/characters/{id}/redo
 
 **Para el siguiente agente:** Fase 002 completamente funcional. Siguiente: Fase 003 — Generación de Spots.
+
+---
+
+## [2026-07-17] — Orquestador — Mejora del sistema agéntico para automatización
+
+**Hice:** Reforcé la capa agéntica (no de producto) para arrancar la automatización con modelos de frontera. Tres ejes pedidos por el humano: modelos de frontera, roles más nítidos, agente orquestador.
+
+**Archivos creados:**
+- `.claude/agents/tv-characters-orchestrator.md` — orquestador ejecutable (model: opus, con tool `Agent` para delegar). Cierra el loop: leer memoria → elegir tarea → delegar al dominio → verificar con reviewer → cerrar memoria.
+- `.claude/agents/tv-characters-reviewer.md` — auditor de verificación (model: opus, solo lectura + Bash). Materializa la regla anti-alucinación de AGENTS §6: ejecuta el camino real y devuelve VEREDICTO/EVIDENCIA/DESVIACIONES/BLOQUEOS.
+
+**Archivos modificados:**
+- `.claude/agents/tv-characters-{backend,frontend,pipeline}.md` — añadido bloque "Definition of Done" con checklist verificable por rol.
+- `.claude/agents/tv-characters-pipeline.md` y `.agents/skills/ai.md` — corregida inconsistencia: el proveedor de video es Kling Omni via Luma API (ya decidido), no "research pendiente".
+- `.agents/AGENTS.md` §7 — tabla con los 5 subagentes reales y su modelo. §8 — guía de modelos mapeada a frontera (Opus 4.8 / Sonnet 5 / Haiku 4.5), elección por riesgo del error.
+
+**Decisión:** los alias `opus`/`sonnet`/`haiku` en el frontmatter se dejan como alias (resuelven al frontier actual, forward-compatible), no se fijan IDs exactos.
+
+**Para el siguiente agente:** el Orquestador ahora es un subagente invocable. Para avanzar Fase 003, despáchalo o sigue en modo directo; en ambos casos cierra con `tv-characters-reviewer` antes de marcar backlog `[x]`.

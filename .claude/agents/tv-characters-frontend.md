@@ -26,6 +26,13 @@ Eres consumidor del contrato de API, no su autor. Antes de llamar a un endpoint,
 - NSFW: mensaje neutro, sin detallar qué se detectó.
 - Roles: admin ve gestión de usuarios; user ve personajes y spots.
 
+## Definition of Done (todos deben cumplirse)
+
+- [ ] Consumes la forma exacta del endpoint según `MEMORY.md` (no inventaste campos ni rutas).
+- [ ] Las reglas de negocio del UI se reflejan (límites, rehacer, NSFW neutro, roles).
+- [ ] `npm run build` compila sin errores de tipos y `npm run lint` pasa.
+- [ ] Recorriste el flujo en el navegador con el backend levantado — lo viste funcionar.
+
 ## Verificación
 
 ```bash

@@ -73,7 +73,17 @@ Por eso, antes de marcar cualquier tarea `[x]` en `backlog.md`:
 
 ## 7. De rol documentado a subagente ejecutable
 
-Los tres roles de la §3 existen como subagentes reales de Claude Code en `.claude/agents/` (`tv-characters-backend`, `tv-characters-frontend`, `tv-characters-pipeline`), invocables con la herramienta `Agent`. Cuando el Orquestador decide qué rol asumir, tiene dos modos:
+Los roles existen como subagentes reales de Claude Code en `.claude/agents/`, invocables con la herramienta `Agent`:
+
+| Subagente | Dominio | Modelo |
+|---|---|---|
+| `tv-characters-orchestrator` | Coordina: lee memoria, elige tarea, delega, cierra | `opus` |
+| `tv-characters-backend` | API, DB, auth, límites | `sonnet` |
+| `tv-characters-frontend` | UI React, estado de cliente | `sonnet` |
+| `tv-characters-pipeline` | Generación, NSFW, consistencia | `opus` |
+| `tv-characters-reviewer` | Verifica que lo "hecho" corre de verdad (§6) | `opus` |
+
+Cuando el Orquestador decide qué rol asumir, tiene dos modos:
 
 - **Modo directo** (por defecto, tareas pequeñas o que cruzan dominios): carga la skill
   como contexto propio y trabaja tú mismo.
@@ -83,11 +93,15 @@ Los tres roles de la §3 existen como subagentes reales de Claude Code en `.clau
 No despaches en paralelo dos subagentes que toquen `HEARTBEAT.md`/`MEMORY.md` al mismo
 tiempo: la regla de "una tarea a la vez" (§5) aplica también en modo delegado.
 
-## 8. Guía de modelo por tipo de tarea
+## 8. Guía de modelo por tipo de tarea (modelos de frontera)
 
-| Tarea | Modelo sugerido | Por qué |
-|---|---|---|
-| Implementación rutinaria dentro de un contrato ya definido (CRUD, componente de UI) | Sonnet | Bien definida, bajo riesgo |
-| Debugging esquivo, diseño de arquitectura, qualquer cosa que toque `SOUL.md` | Opus | Mayor costo de un error |
-| Auditoría de "¿esto que dice el HEARTBEAT es cierto?" | Opus, con verificación ejecutada | Tipo de tarea que falló antes |
-| Exploración amplia del repo sin saber qué buscas | Subagente `Explore` | No contamina contexto principal |
+Los alias `opus`/`sonnet`/`haiku` en el frontmatter resuelven al modelo de frontera actual de cada familia (**Opus 4.8**, **Sonnet 5**, **Haiku 4.5**). Elige por **riesgo del error**, no por costumbre — un error en NSFW o en algo que toca `SOUL.md` cuesta mucho más que uno en un CRUD.
+
+| Tarea | Alias | Frontera | Por qué |
+|---|---|---|---|
+| Implementación rutinaria dentro de un contrato ya definido (CRUD, componente de UI) | `sonnet` | Sonnet 5 | Bien definida, bajo riesgo |
+| Debugging esquivo, arquitectura, cualquier cosa que toque `SOUL.md` (NSFW, consistencia, límites) | `opus` | Opus 4.8 | Mayor costo de un error |
+| Auditoría "¿lo que dice el HEARTBEAT es cierto?" (subagente `reviewer`) | `opus` | Opus 4.8 | Con verificación ejecutada; tipo de tarea que falló antes |
+| Coordinación/routing entre dominios (subagente `orchestrator`) | `opus` | Opus 4.8 | Una mala asignación arrastra a todos los sub-agentes |
+| Tarea mecánica y barata (renombrar, formatear, extraer texto) | `haiku` | Haiku 4.5 | Sin ambigüedad; el modelo caro no aporta |
+| Exploración amplia del repo sin saber qué buscas | — | Subagente `Explore` | No contamina el contexto principal |
