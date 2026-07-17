@@ -382,3 +382,54 @@
 **Decisión:** los alias `opus`/`sonnet`/`haiku` en el frontmatter se dejan como alias (resuelven al frontier actual, forward-compatible), no se fijan IDs exactos.
 
 **Para el siguiente agente:** el Orquestador ahora es un subagente invocable. Para avanzar Fase 003, despáchalo o sigue en modo directo; en ambos casos cierra con `tv-characters-reviewer` antes de marcar backlog `[x]`.
+
+---
+
+## [2026-07-17] — Agente Orquestador — Auditoría y corrección de Fase 002 + rediseño profesional del frontend
+
+**Contexto:** el usuario pidió una revisión completa y honesta de lo ya implementado (backend + frontend) para convertirlo en un producto profesional para **Canal 11 TVU (UAGRM)**. Alcance acordado explícitamente: sin logo oficial (identidad textual propia, sustituible), y sin construir Fase 003 (Spots/video) — esa sigue pendiente tal como estaba.
+
+**Bugs reales encontrados y corregidos (verificados ejecutando contra el Supabase real del proyecto, no solo leyendo código):**
+
+1. **NSFW de salida nunca se ejecutaba.** `nsfw_filter.check_image_nsfw()` existía desde Fase 002 pero ningún caller la invocaba (confirmado por grep). Las variaciones generadas se mostraban al usuario sin pasar el filtro de salida que SOUL.md §6 exige como no negociable. Corregido: `check_generated_images_nsfw()` descarga cada variación y la valida, fail-closed, con un reintento ante 429 (necesario porque Pollinations gratis rate-limita).
+2. **`PUT /admin/users/{id}/limits` era un endpoint fantasma.** No existía columna de límite configurable; el endpoint manipulaba `characters_used` hacia atrás asumiendo que el tope siempre era 2, así que subir el límite a 5 no cambiaba el comportamiento real de `characters.py` (seguía comparando contra `2` hardcodeado). Corregido con columnas reales `characters_limit_override`/`spots_limit_override` en `users` + `app/services/limits.py` (`get_effective_limits`) como única fuente de verdad.
+3. **CRUD de usuarios duplicado** entre `auth.py` (`/api/v1/auth/users`) y `users.py` (`/api/v1/users`). `auth.py` ahora solo tiene `login`/`me`; `users.py` es el único CRUD admin. Verificado: `/api/v1/auth/users` → 404.
+4. **Categorías desincronizadas:** `create_character` validaba contra una lista hardcodeada `["deportes","noticias","entretenimiento"]`, no contra `SpotCategory` — una categoría nueva creada por el admin nunca podía usarse. Corregido para validar contra la DB; se agregó `seed_default_categories()` idempotente al arranque (la tabla podía quedar vacía en un despliegue nuevo).
+5. **`get_week_start()` duplicada** en `characters.py` y `admin.py` — unificada en `services/limits.py`.
+6. **CORS hardcodeado a localhost** — ahora sale de `settings.CORS_ORIGINS`.
+7. **`oxlint` documentado como "ya configurado" en `.agents/skills/frontend.md` pero no lo estaba** (ni la dependencia ni el script `lint` existían en `package.json`). Instalado y conectado de verdad.
+
+**Migración de DB ejecutada (con confirmación explícita del usuario):** `ALTER TABLE users ADD COLUMN IF NOT EXISTS characters_limit_override INTEGER` y lo mismo para `spots_limit_override`, contra el Supabase real del proyecto — `create_all()` no altera tablas ya existentes, solo crea las que faltan.
+
+**Frontend — rediseño profesional:**
+- Identidad textual "TVU Studio" / "Canal 11 · UAGRM" (sin logo — decisión explícita del usuario) en Landing, Login, Sidebar, `index.html`.
+- Paleta nueva (navy + acento ámbar) reemplazando el azul genérico de plantilla, escala tipográfica y sombras en tokens de `App.css`.
+- `Dashboard.tsx` y `Admin.tsx` usaban `fetch` crudo con header manual en vez de `authFetch` — la expiración de sesión no se aplicaba ahí. Migrados ambos.
+- Estilos inline eliminados en `Characters.tsx`, loading states unificados con el patrón `Loader2` existente.
+- Mojibake corregido en `store.ts`.
+- `GenerateSpot.tsx` (placeholder de Fase 003) rediseñado como estado "Próximamente" profesional, sin implementar el pipeline real.
+
+**Verificación ejecutada (no solo "compila"):**
+- Backend: venv creado, `requirements.txt` instalado, `uvicorn` levantado real contra Supabase. Probado: login, `/auth/users` (404 esperado), `/users` (funcional), override de límites (7/12 persiste y se refleja en lecturas posteriores), categoría inválida (400) y válida (201), creación de personaje con NSFW de salida real conectado (confirmado por rechazos reales en `security.log` — algunos por 429 de Pollinations bajo rate-limit de mis propias pruebas repetidas, no por contenido).
+- Frontend: `tsc -b && vite build` limpio, `npx oxlint src` sin warnings, `npm run dev` levantado y el proxy `/api → :8000` verificado end-to-end con curl real.
+- **No se tomaron capturas de navegador** (sin `chromium-cli` ni Playwright instalado en este entorno Windows) — verificación a nivel HTTP/build/lint, no visual. Queda pendiente que un humano confirme visualmente.
+
+**Riesgo operativo descubierto (no introducido por este trabajo, pero ahora visible):** conectar el NSFW de salida obliga a esperar la generación real de las 3 imágenes antes de responder — antes el endpoint respondía casi instantáneo (solo construía URLs, la generación quedaba diferida al `<img>` del navegador). Ahora `POST /characters` puede tardar 30-90s+ bajo Pollinations gratis, más aún si el proveedor rate-limita (429). Es el costo correcto de cumplir SOUL.md §6, no un bug — si molesta en uso real, la solución es una API key de Pollinations o mover el chequeo a `BackgroundTasks`, no revertir el filtro.
+
+**Para el siguiente agente:** Fase 002 queda auditada y con los bugs reales cerrados; Fase 003 sigue exactamente donde estaba (decisión explícita de alcance). Si se agregan columnas a modelos ya migrados en Supabase, recordar que `create_all()` no las agrega solo — hay que correr el `ALTER TABLE` a mano.
+
+---
+
+## [2026-07-17] — Agente Orquestador — Integración de logos oficiales y colores institucionales reales
+
+**Contexto:** el usuario proveyó los logos reales (Canal 11 TVU y UAGRM) y los colores oficiales (blanco, rojo, azul), reemplazando el esquema textual/ámbar provisional de la sesión anterior.
+
+**Hecho:**
+- Los archivos venían en `frontend/src/public/` — corregido: esa carpeta NO es la estática de Vite (Vite solo sirve `frontend/public/`, sibling de `index.html`). Movidos a `frontend/public/logo-tvu.jpg` y `logo-uagrm.jpg`.
+- Paleta de `App.css` actualizada: `--primary: #1a56db` (azul, muestreado del logo) y `--danger: #d92626` (rojo, mismo muestreo) — antes era un ámbar `#f2a900` inventado por no tener assets.
+- Logos integrados en Sidebar, Login y Landing dentro de un chip blanco (`.brand-logo-chip`) porque son JPEG con fondo blanco — sin el chip se verían con un borde gris feo sobre el tema oscuro.
+- Favicon actualizado a `logo-tvu.jpg`.
+
+**Verificado:** `npm run build` limpio, `npx oxlint src` limpio, dev server sirviendo `/logo-tvu.jpg` y `/logo-uagrm.jpg` con 200.
+
+**Para el siguiente agente:** si se agregan más assets de marca, van en `frontend/public/`, nunca en `frontend/src/public/`.

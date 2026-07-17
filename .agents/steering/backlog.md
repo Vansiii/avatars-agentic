@@ -65,9 +65,11 @@
 
 - Consistencia de personaje por imagen de referencia (no modelos avanzados) — suficiente para Alpha
 - ~~Proveedor de video por definir (research pendiente)~~ ✅ Kling Omni via Luma API (2026-07-15)
-- `create_all` en arranque en vez de Alembic — aceptable para Alpha
-- NSFW filter: implementación básica con palabras clave (Alpha) — en producción usar NudeNet o similar
+- `create_all` en arranque en vez de Alembic — aceptable para Alpha, pero implica migrar columnas nuevas a mano contra Supabase (ver MEMORY.md 2026-07-17)
+- NSFW filter: implementación básica con palabras clave + heurística de tamaño (Alpha) — en producción usar NudeNet o similar. Desde 2026-07-17 la salida SÍ se valida (antes no se llamaba); sigue siendo heurístico, no un modelo real.
 - Eliminación de imágenes a 24h y strip de EXIF — pendiente para Fase 004
+- **(2026-07-17) Latencia de `POST /characters`:** validar la salida obliga a esperar la generación real de las 3 imágenes antes de responder — con Pollinations gratis (sin API key) puede tardar 30-90s+ o más si rate-limita (429). Considerar API key de Pollinations o mover a `BackgroundTasks` si se vuelve un problema de UX real.
+- **(2026-07-17) Rediseño de UI/UX aplicado** (paleta navy+ámbar, identidad "TVU Studio · Canal 11 UAGRM" sin logo oficial) — sustituir por assets de marca reales cuando el canal los provea.
 
 ---
 
