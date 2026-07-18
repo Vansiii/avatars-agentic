@@ -542,3 +542,22 @@
 **Verificado ejecutando:** `npx tsc -b` limpio, `npx oxlint src` limpio (exit 0), `npm run build` compila sin error. Con backend (`:8000`, `/docs` → 200) y frontend (`:5173`) ya corriendo, se confirmó por `curl` que los 5 archivos tocados (`Landing.tsx`, `App.css`, `Admin.tsx`, `Characters.tsx`, `GenerateSpot.tsx`) transforman con 200 vía el dev server de Vite. Se verificó balance de llaves de `App.css` (script en Node, profundidad final 0) tras todas las ediciones. **Sigue sin haber herramienta de automatización de navegador en este entorno** (mismo bloqueo que la pasada anterior) — no se tomaron capturas ni se recorrió el flujo clickeando en un navegador real; pendiente que alguien con navegador abra `localhost:5173` y confirme visualmente landing, tema claro (se revisó que las clases nuevas usan `var(--...)` existentes, ninguna con color fijo fuera de los ya establecidos como "texto blanco sobre fondo sólido"), y que el `user-select` no rompió la selección de texto en inputs/tablas/nombres de personaje.
 
 **Para el siguiente agente:** si agregás una página nueva con lista de datos fetcheados, reusá `CharacterCardSkeleton`/`StatCardSkeleton`/`TableRowSkeleton` de `frontend/src/components/Skeleton.tsx` en vez de un `inline-loading` con spinner — ese patrón queda reservado para casos donde NO se conoce la forma final (o para generación de IA con tiempo variable, ahí seguí usando `.loading-overlay`). El toggle de tema vive en `useThemeStore` (`frontend/src/store.ts`) — no dupliques la lógica de persistencia, usá `useThemeStore((s) => s.theme)` / `toggleTheme()`.
+
+---
+
+## [2026-07-18] — Agente Frontend — Tercera pasada UI/UX: dashboard responsive + Fitts + jerarquía de CTA (VERIFICADA EN NAVEGADOR)
+
+**Hice:** intervención quirúrgica de UX/UI (alcance "roto + refinamiento visual" elegido por el usuario), anclada a leyes de UX que pidió justificar (Fitts, Hick). NO fue rediseño total — se rechazó explícitamente porque tiraba dos rondas de trabajo válido.
+
+**Cambios:**
+1. **Dashboard responsive (el hueco grave):** en 1806 líneas de CSS el único `@media (max-width)` era `860px` y solo cubría la landing; el shell (`DashboardLayout`) era `sidebar` 240px fijos + `main` en flex, sin colapso — en mobile la barra se comía la pantalla. Ahora, debajo de 900px: topbar sticky con hamburguesa, sidebar off-canvas (`.sidebar.open` + `translateX`), backdrop que cierra al tocar fuera, botón X, y cierre automático al navegar (`useEffect` sobre `location.pathname`). En desktop (≥900px) NADA cambió. Transición del off-canvas apagada en `prefers-reduced-motion: reduce`.
+2. **Ley de Fitts:** `.theme-toggle` 36→44px (mínimo táctil); `.btn-secondary`/`.btn-danger` con `min-height: 2.5rem` (40px) — los botones de tabla de Admin tenían ~30px.
+3. **Ley de Hick / jerarquía:** el hero de la landing repetía el mismo botón del nav; ahora tiene primario "Iniciar Sesión" + secundario "Cómo funciona" (ancla `#como-funciona` con `scroll-behavior: smooth` guardado por reduced-motion).
+
+**Archivos:** `frontend/src/components/DashboardLayout.tsx` (topbar+hamburguesa+estado `menuOpen`), `frontend/src/App.css` (bloque nuevo al final: Fitts, landing CTA, shell responsive, smooth-scroll; + edit del `.theme-toggle`), `frontend/src/pages/Landing.tsx` (CTA secundario + `id` de sección).
+
+**Decisión:** bisturí, no excavadora. El frontend ya tenía dos rondas de UI/UX (tokens, tema claro/oscuro, skeletons, `focus-visible`, `prefers-reduced-motion`) — rehacerlo habría sido churn destructivo. Se tocaron 3 archivos, cero dependencias, cero cambios de API/lógica.
+
+**Verificado ejecutando + POR FIN EN NAVEGADOR:** `tsc -b` limpio, `oxlint src` exit 0, dev server responde 200. **El usuario abrió `localhost:5173` y confirmó visualmente** ("Está bien el frontend") — cierra el punto "recorrer el flujo en el navegador" del DoD de frontend.md que quedó pendiente las DOS pasadas anteriores (2026-07-17).
+
+**Para el siguiente agente:** si agregás items al sidebar o botones al chrome, el patrón mobile ya está — el sidebar off-canvas y la topbar viven en `DashboardLayout.tsx`, el CSS responsive en el bloque final de `App.css` bajo `@media (max-width: 900px)`. El breakpoint del shell es 900px; el de la landing sigue en 860px (no los unifiqué, son componentes distintos). Cualquier botón nuevo hereda automáticamente el min-height de Fitts si usa `.btn-secondary`/`.btn-danger`.
