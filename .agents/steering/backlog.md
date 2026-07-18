@@ -40,14 +40,14 @@
 
 ## Fase 003 — Generación de Spots (Video) 🔴
 
-- [ ] **3.1** 🔴 · Endpoint POST /spots (personaje + script + tipo)
-- [ ] **3.2** 🔴 · Pipeline de generación de video (Kling Omni via Luma API)
-- [ ] **3.3** 🔴 · Consistencia: personaje aparece en el video (usar reference_image_url)
-- [ ] **3.4** 🟡 · Tipos de video: short (3-5s) y long (15-30s)
-- [ ] **3.5** 🟡 · Selección de variación de video (3 opciones)
-- [ ] **3.6** 🟡 · Sistema de rehacer para spots (máx 3 veces)
-- [ ] **3.7** 🔴 · Control de límites semanales (5 spots/usuario/semana)
-- [ ] **3.8** 🟡 · Frontend: página de generar spot con flujo completo
+- [x] **3.1** 🔴 · Endpoint POST /spots (personaje + script + tipo)
+- [x] **3.2** 🔴 · Pipeline de generación de video — **Shotstack** (composición, reemplaza a Kling/Luma que nunca se implementó; decisión explícita del usuario 2026-07-17, ver MEMORY.md)
+- [x] **3.3** 🔴 · Consistencia: personaje aparece en el video (usa reference_image_url como imagen base del composite)
+- [x] **3.4** 🟡 · Tipos de video: short (4s) y long (20s)
+- [x] **3.5** 🟡 · Selección de variación de video (3 opciones)
+- [x] **3.6** 🟡 · Sistema de rehacer para spots (máx 3 veces)
+- [x] **3.7** 🔴 · Control de límites semanales (5 spots/usuario/semana)
+- [x] **3.8** 🟡 · Frontend: página de generar spot con flujo completo
 
 ---
 
@@ -70,6 +70,10 @@
 - Eliminación de imágenes a 24h y strip de EXIF — pendiente para Fase 004
 - **(2026-07-17) Latencia de `POST /characters`:** validar la salida obliga a esperar la generación real de las 3 imágenes antes de responder — con Pollinations gratis (sin API key) puede tardar 30-90s+ o más si rate-limita (429). Considerar API key de Pollinations o mover a `BackgroundTasks` si se vuelve un problema de UX real.
 - **(2026-07-17) Rediseño de UI/UX aplicado** (paleta navy+ámbar, identidad "TVU Studio · Canal 11 UAGRM" sin logo oficial) — sustituir por assets de marca reales cuando el canal los provea.
+- **(2026-07-17) Shotstack en modo `sandbox` expira los videos a las 24h** (confirmado con `curl -I`, header `x-amz-expiration`). Hace falta `SHOTSTACK_API_KEY_PRODUCTION` real y decidir si se re-aloja `output_url` en storage propio antes de la Fase 004.
+- **(2026-07-17) Shotstack es composición, no IA generativa** — el spot es la imagen del personaje con efecto de cámara + subtítulo, no video con movimiento real del personaje. Decisión explícita del usuario, ver MEMORY.md. Si se quiere movimiento real, se necesita un proveedor imagen-a-video adicional.
+- **(2026-07-17) Overhaul visual del frontend** (tema claro/oscuro con toggle sol/luna + loading skeletons con silueta real, ver MEMORY.md) — no era tarea del backlog fasado, se hizo por pedido directo del usuario. No se recorrió el flujo en un navegador real (sin herramienta de screenshot/automatización en este entorno) — solo se verificó `tsc -b`/`oxlint`/`npm run build` limpios y que cada módulo transforma sin error 500 vía el dev server de Vite. Recomendado que alguien con navegador confirme visualmente antes de dar por cerrado el punto "recorrer el flujo" del DoD de frontend.md.
+- **(2026-07-17) Segunda pasada de UI/UX** (landing rediseñada, `user-select: none` en el chrome, animaciones CSS con `prefers-reduced-motion`, botones con hover/active/focus-visible, fricciones de UX en Characters/GenerateSpot/Admin — ver MEMORY.md) — tampoco era tarea del backlog fasado, pedido directo del usuario tras revisar la pasada anterior. Mismo bloqueo: sin herramienta de navegador en este entorno, verificado solo con `tsc -b`/`oxlint`/`npm run build`/`curl`. Dos pasadas de UI/UX seguidas sin confirmación visual real acumuladas — recomendado priorizar esa confirmación antes de seguir agregando cambios visuales encima.
 
 ---
 
@@ -95,7 +99,6 @@ npm run dev
 - Frontend: React 19 + TypeScript + Vite + zustand + react-query
 
 ### Proveedor de video para Fase 003
-- **Kling Omni via Luma API**
-- Audio nativo integrado
-- 1080p / 4K
-- Documentado en MEMORY.md (entrada del 2026-07-15)
+- **Shotstack** (composición: imagen del personaje + efecto de cámara + subtítulo, no IA generativa) — reemplaza a "Kling Omni via Luma API" (nunca se implementó)
+- Modo actual: `sandbox` (con watermark, videos expiran a las 24h)
+- Documentado en MEMORY.md (entrada del 2026-07-17)

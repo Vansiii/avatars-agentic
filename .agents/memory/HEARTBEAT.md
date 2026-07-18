@@ -3,7 +3,7 @@
 > **Foto del estado ACTUAL.** Este archivo se **sobrescribe** en cada cambio de turno.
 > No es un historial: si buscas qué pasó antes, ve a `MEMORY.md`.
 
-**Última actualización:** 2026-07-17 — por el **Agente Orquestador** (auditoría + corrección de bugs reales en Fase 002 + rediseño profesional del frontend para Canal 11 TVU · UAGRM)
+**Última actualización:** 2026-07-17 — Segunda pasada de UI/UX del frontend: landing rediseñada (hero de 2 columnas + mockup CSS + sección "Cómo funciona"), `user-select: none` aplicado al "chrome" de la UI (botones/nav/tabs/badges) sin tocar contenido real (inputs, emails, tablas, nombre/descripción de personaje), animaciones CSS puras (fade-in de página, hover-lift de tarjetas, press de botones, transición de modal, entrada escalonada de listas) todas guardadas con `prefers-reduced-motion`, y botones con estados hover/active/focus-visible/disabled consistentes. Tarea puramente visual, sin tocar backend ni contrato de API. Ver sección "Estado Frontend" abajo.
 
 ---
 
@@ -15,129 +15,87 @@
 |------|--------|
 | Fase 001 — Base del sistema | ✅ COMPLETA |
 | Fase 002 — Creación de personajes | ✅ COMPLETA |
-| Fase 003 — Generación de spots | ⏳ Pendiente |
+| Fase 003 — Generación de spots | ✅ COMPLETA (ver limitación de Shotstack abajo) |
 | Fase 004 — Cierre del Alpha | ⏳ Pendiente |
 
 ---
 
 ## Bloqueos actuales
 
-1. ~~**Proveedor de video:**~~ ✅ RESUELTO: Kling Omni via Luma API
-2. ~~**Modelo de datos nuevo:**~~ ✅ RESUELTO: Modelos creados y verificados en Supabase
-3. **Pollinations.ai (free tier) rate-limita bajo ráfagas de pedidos (429).** Descubierto al verificar el fix del filtro NSFW de salida (ver abajo): crear un personaje ahora puede tardar 30-90s+ porque el backend espera a que las 3 imágenes generen y se descarguen antes de responder (antes no esperaba nada, solo construía URLs). No es un bug de este cambio — es el costo real de cumplir SOUL.md §6 (validar salida) con un proveedor gratuito sin API key. Si esto molesta en uso real, la solución es conseguir una API key de Pollinations o mover el chequeo a `BackgroundTasks` con polling, no revertir el filtro.
+1. **Videos de Shotstack en modo `sandbox` expiran a las 24h** (`x-amz-expiration: Delete After 24 Hours` en el S3 de salida, confirmado con `curl -I` real). Un spot seleccionado hoy deja de tener `output_url` funcional mañana. Para producción real hace falta `SHOTSTACK_API_KEY_PRODUCTION` (hoy `xxxxx` en `.env`) y, probablemente, descargar/re-alojar el video en storage propio antes de que expire. No implementado — anotado para Fase 004.
+2. **Shotstack no genera movimiento de IA del personaje** — es un motor de composición. El usuario pidió explícitamente un avatar animado real ("que interactúe a lo largo del video") y se le presentaron opciones investigadas en vivo (HeyGen recomendado, Hedra alternativa) — respondió **"Ninguno por ahora"**, así que se mejoró el montage dentro de Shotstack (varios planos/encuadres de la misma foto + fundidos + subtítulos segmentados) en vez de sumar proveedor. Si el usuario cambia de opinión, retomar la comparación ya hecha en `MEMORY.md` (re-verificar contra docs oficiales, el campo cambia rápido) — hace falta sumar un proveedor imagen-a-video/foto-a-avatar ANTES de Shotstack, no en su lugar.
+3. **Pollinations.ai (free tier) rate-limita bajo ráfagas (429).** Sigue igual que antes — no relacionado a Fase 003.
 
 ---
 
-## Estado Backend — Fase 002 auditada y corregida (2026-07-17)
+## Estado Backend — Fase 003 agregada (2026-07-17)
 
-Se encontraron y corrigieron bugs reales (no solo estilo) verificados ejecutando contra el Supabase real del proyecto:
-
-- **NSFW de salida ahora se ejecuta de verdad.** `check_image_nsfw()` existía desde Fase 002 pero nadie la llamaba (confirmado por grep) — las variaciones se mostraban sin pasar el filtro de salida que SOUL.md §6 exige. Ahora `nsfw_filter.check_generated_images_nsfw()` descarga cada variación generada y la valida antes de devolverla; fail-closed real, con reintento ante 429.
-- **Límites por usuario ahora son configurables de verdad.** Antes `PUT /admin/users/{id}/limits` manipulaba `characters_used` asumiendo que el tope siempre era 2 — subir el límite a 5 no cambiaba nada porque `characters.py` seguía comparando contra `2` hardcodeado. Se agregaron columnas `characters_limit_override`/`spots_limit_override` en `users` (migradas a mano en Supabase, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, ver MEMORY.md) y un módulo único `app/services/limits.py`.
-- **CRUD de usuarios duplicado eliminado.** `auth.py` solo tiene `login`/`me` ahora; `users.py` es el único CRUD admin. Verificado: `/api/v1/auth/users` → 404, `/api/v1/users` funciona.
-- **Categorías desincronizadas, corregido.** `create_character` valida contra `SpotCategory` real (DB), no una lista hardcodeada — una categoría creada por el admin ya se puede usar. Se agregó `seed_default_categories()` (Deportes/Noticias/Entretenimiento) al arranque, idempotente.
-- **CORS ahora sale de `settings.CORS_ORIGINS`**, no hardcodeado a localhost.
-
-### Auth
-- POST /api/v1/auth/login — login con JWT
-- GET /api/v1/auth/users/me — obtener usuario actual
-- PUT /api/v1/auth/users/me — actualizar perfil
-
-### Users (Admin) — único CRUD, ya no duplicado con auth.py
-- GET /api/v1/users — listar usuarios
-- POST /api/v1/users — crear usuario
-- GET /api/v1/users/{id} — obtener usuario
-- PUT /api/v1/users/{id} — actualizar usuario
-- DELETE /api/v1/users/{id} — eliminar usuario
-
-### Admin
-- GET /api/v1/admin/metrics — métricas del sistema
-- GET /api/v1/admin/users/{id}/limits — ver límites efectivos (override o default)
-- PUT /api/v1/admin/users/{id}/limits — modificar el override real (persiste en `users`)
-
-### Categories
-- GET /api/v1/categories — listar categorías (sembradas por defecto al arrancar)
-- POST /api/v1/categories — crear categoría
-- PUT /api/v1/categories/{id} — actualizar categoría
-- DELETE /api/v1/categories/{id} — eliminar categoría
-
-### Characters
-- POST /api/v1/characters — crear personaje (retorna variaciones que ya pasaron NSFW de salida; puede tardar 30-90s+, ver Bloqueos)
-- GET /api/v1/characters — listar personajes del usuario
-- GET /api/v1/characters/{id} — obtener personaje
-- POST /api/v1/characters/{id}/select — seleccionar variación
-- POST /api/v1/characters/{id}/redo — rehacer variaciones (máx 3, también con NSFW de salida)
+### Spots (nuevo)
+- POST /api/v1/spots — genera 3 variaciones de video (personaje activo + guión + tipo corto/largo); valida guión 10-500 chars, NSFW de texto fail-closed, límite semanal (`VID_001`)
+- GET /api/v1/spots — lista spots del usuario
+- GET /api/v1/spots/{id} — obtener spot
+- POST /api/v1/spots/{id}/select — selecciona variación; solo aquí se decrementa `spots_used`
+- POST /api/v1/spots/{id}/redo — rehacer (máx 3, no decrementa límite)
 
 ### Servicios
-- `image_provider.py` — Generación con Pollinations.ai
-- `nsfw_filter.py` — Filtro NSFW fail-closed: entrada Y salida (antes solo entrada estaba conectada)
-- `services/limits.py` — **nuevo**: única fuente de verdad para límites semanales (antes duplicado en characters.py/admin.py)
-- `consistency.py` — Consistencia de personajes
-- `video_provider.py` — Placeholder para Fase 003
-
-### Validaciones implementadas
-- ✅ Tamaño imagen ≤ 10 MB
-- ✅ Longitud descripción 10-500 caracteres
-- ✅ Filtro NSFW en entrada Y salida (imagen + texto)
-- ✅ Control de límites semanales, configurables por usuario (override real)
+- `video_provider.py` — **reescrito**: llama a Shotstack real (`build_spot_edit`, `_submit_render`, `_poll_render`, `generate_spot_variations`). Antes era un placeholder que devolvía URLs falsas. Cada spot lleva narración con el `text-to-speech` nativo de Shotstack (voz Lupe, es-US, modo newscaster) — no un proveedor externo (Pollinations TTS quedó deprecado, verificado en vivo).
+- `settings.py` — nuevas variables `SHOTSTACK_API_KEY_SANDBOX`, `SHOTSTACK_API_KEY_PRODUCTION`, `SHOTSTACK_ENV`.
 
 ### DB
-- Supabase PostgreSQL 17.6 (us-east-1)
-- Credenciales en `backend/.env`
-- **Nota Alpha:** `create_all()` no altera tablas existentes — al agregar columnas a modelos ya migrados hay que correr el `ALTER TABLE` a mano contra Supabase (se hizo para `characters_limit_override`/`spots_limit_override`). Sigue pendiente Alembic (deuda ya conocida).
+- `Spot.variations_data` (Text, nullable) — **agregada a mano contra Supabase** (`ALTER TABLE spots ADD COLUMN IF NOT EXISTS variations_data TEXT`), mismo patrón que `characters_limit_override`. `create_all()` no la hubiera creado sola en una tabla ya existente.
 
 ---
 
-## Estado Frontend — Rediseño profesional aplicado (2026-07-17)
+## Estado Frontend — GenerateSpot.tsx implementado (2026-07-17)
 
-### Stack
-- React 19 + TypeScript + Vite
-- zustand (estado global con persist)
-- @tanstack/react-query
-- lucide-react (iconos)
-- Tema oscuro con identidad propia (sin logo real — placeholder textual, ver abajo)
-- **`oxlint` instalado y con script `npm run lint` de verdad** — antes `.agents/skills/frontend.md` decía "ya configurado" pero no existía ni la dependencia ni el script.
+- Antes era el placeholder "Próximamente". Ahora: selector de personaje activo → guión (10-500) → tipo corto/largo → genera 3 variaciones → `<video controls>` para elegir/rehacer → lista de spots ya generados.
+- Mismo patrón visual que `Characters.tsx` (loading unificado, batches de variaciones, `authFetch`).
+- CSS: `.variation-card video` (16:9) y `.character-card-image video` agregadas — antes esas reglas solo cubrían `img`.
+- Verificado: `tsc -b` y `npx oxlint src` limpios. No se tomaron capturas de navegador (sin herramienta de automatización en este entorno) — recomendado abrir manualmente `/spots` (ruta ya existente) para confirmar visualmente.
 
-### Identidad visual
-- **Logos oficiales ya integrados** (el usuario los proveyó): `frontend/public/logo-tvu.jpg` (escudo Canal 11 TVU) y `logo-uagrm.jpg` (UAGRM) — estaban puestos en `frontend/src/public/` por error (esa carpeta NO es la estática de Vite, solo `frontend/public/` lo es); se movieron. Se muestran en Sidebar, Login y Landing dentro de un chip blanco (`.brand-logo-chip`) porque son JPEG con fondo blanco y se verían con un recuadro gris sobre el tema oscuro sin eso.
-- Paleta actualizada a los **colores institucionales reales** (azul `#1a56db` + rojo `#d92626`, muestreados de los logos) — reemplaza el ámbar genérico usado antes de tener los assets.
-- `index.html` `<title>` = "TVU Studio · Canal 11 UAGRM", favicon = `logo-tvu.jpg`.
-- Marca textual "TVU Studio" se mantiene como acompañante de los logos, no reemplazo.
+## Estado Frontend — Overhaul visual: tema claro/oscuro + skeletons (2026-07-17)
 
-### Páginas
-- **Landing** — nav superior + hero con marca + footer institucional
-- **Login** — con marca "TVU Studio · Canal 11 UAGRM"
-- **Dashboard** — cards de límites ahora con barra de progreso (usado/total), no solo texto
-- **Characters** — mismo flujo, sin estilos inline, loading unificado (`Loader2` + texto)
-- **GenerateSpot** — placeholder "Próximamente" rediseñado (antes era un botón deshabilitado suelto) — Fase 003 sigue sin implementarse, fuera de alcance de esta tarea
-- **Profile** — sin cambios de lógica
-- **Admin** — paleta nueva, loading unificado
+**Tema claro/oscuro:**
+- `frontend/index.html` tiene un script inline en `<head>` que fija `data-theme` en `<html>` ANTES del primer paint (lee `localStorage["avatares-theme"]`, si no existe cae a `prefers-color-scheme`). Sin esto habría flash del tema incorrecto al recargar.
+- `frontend/src/store.ts` — nuevo `useThemeStore` (zustand + `persist`, key `avatares-theme`, mismo patrón que `avatares-auth`). `toggleTheme()`/`setTheme()` escriben el atributo en `document.documentElement` directamente, sin `useEffect` de sincronización.
+- `frontend/src/App.css` — `:root` sigue siendo el tema oscuro histórico (ahora documentado como tal); `:root[data-theme="light"]` define la variante clara con el mismo azul `#1a56db` / rojo `#d92626` de marca. Todos los `color: white` hardcodeados que debían seguir el tema quedaron en `var(--text)` (headings, `.card-value`, `.modal h3`, `.login-card h1`, `.sidebar-header h2`, `.landing-content h1`, `.landing-nav .brand-name`, etc.) — los que quedan literalmente blancos son texto sobre fondo sólido de color (`.btn-primary`, `.btn-danger`, `.btn-select`, `.selected-badge`), correcto en ambos temas. `--success`/`--warning` se oscurecen en el tema claro porque se usan como color de texto plano (el tono oscuro original no pasa AA sobre blanco).
+- `frontend/src/components/ThemeToggle.tsx` (nuevo) — botón sol/luna compartido por `DashboardLayout` (sidebar footer, junto a "Cerrar sesión"), `Landing` (nav) y `Login` (fixed top-right, porque esas dos páginas viven fuera del `DashboardLayout`).
 
-### Correcciones de consistencia
-- **`Dashboard.tsx` y `Admin.tsx` usaban `fetch` crudo** con header manual en vez de `authFetch` de `lib/api.ts` — la expiración de sesión (401 → logout + redirect) solo se aplicaba en `Characters.tsx`. Ya migradas ambas a `authFetch`.
-- Mojibake corregido en `store.ts` (comentario con caracteres corruptos).
+**Skeletons:**
+- `frontend/src/components/Skeleton.tsx` (nuevo) — `CharacterCardSkeleton` (usado en `Characters.tsx` y `GenerateSpot.tsx`), `StatCardSkeleton` (usado en `Dashboard.tsx` y `Admin.tsx`), `TableRowSkeleton` (usado en `Admin.tsx`). Todos reusan las clases CSS reales (`.character-card`, `.card`, celdas de `.users-table`) + un shimmer (`.skeleton`, `@keyframes skeleton-pulse` en `App.css`).
+- Reemplazan los `inline-loading` (spinner + texto) que se usaban para *fetch* de listas/métricas ya conocidas en forma: lista de personajes, lista de spots, stats del dashboard, métricas+tabla de usuarios del admin. También el spinner por-imagen de `.image-loading` (variación individual cargando en `Characters.tsx`) pasó a shimmer porque se conoce el tamaño exacto (cuadrado).
+- Los spinners de generación real con IA (`.loading-overlay`: "Generando personaje...", "Generando spot...", "Generando nuevas variaciones...") NO se tocaron — tiempo variable (30-90s+), ahí un skeleton sería engañoso.
+- `Dashboard.tsx` no tenía ningún estado de loading antes (mostraba 0/2 al instante); se agregó un `loading` boolean mínimo solo para poder mostrar el skeleton pedido.
 
-### Funcionalidades implementadas
-- ✅ Login con JWT y persistencia
-- ✅ Rutas protegidas (solo autenticados)
-- ✅ Admin routes (solo admin)
-- ✅ Token expiración → redirige a login (ahora consistente en TODAS las páginas, no solo Characters)
-- ✅ Loading states unificados (crear, rehacer, cargar imágenes, listas)
-- ✅ Variaciones acumuladas (anteriores + nuevas)
-- ✅ Límites visibles con barra de progreso
-- ✅ Lista de personajes creados
-- ✅ Build exitoso (`tsc -b && vite build`) y lint limpio (`npx oxlint src`, 0 warnings)
-- ✅ Verificado con dev server real: `npm run dev` sirve la app, el proxy `/api` a `:8000` funciona end-to-end
-- ⚠️ No se tomaron capturas de navegador reales (sin herramienta de automatización de navegador en este entorno) — verificado a nivel HTTP/build/lint, no visual pixel-a-pixel. Recomendado: abrir manualmente y confirmar antes de dar por cerrado el rediseño.
+**Verificación real ejecutada (pasada de tema/skeletons):**
+- `npx tsc -b` limpio, `npx oxlint src` limpio (exit 0), `npm run build` genera `dist/` sin errores.
+- Con backend (`:8000`, `/docs` → 200) y frontend (`:5173`) corriendo, se confirmó por `curl` que el `index.html` servido por Vite incluye el script de tema, y que los 10 archivos tocados transforman con 200 vía el dev server (un error de sintaxis da 500 con overlay ahí).
+- **No se recorrió el flujo en un navegador real ni se tomaron capturas** — no hay herramienta de automatización de navegador en este entorno. Sigue pendiente en la siguiente pasada (ver abajo).
+
+## Estado Frontend — Segunda pasada de UI/UX: landing, `user-select`, animaciones, botones (2026-07-17)
+
+El usuario revisó la pasada anterior (tema/skeletons) y pidió una vuelta más sobre 5 ejes concretos. Todo en `frontend/src/App.css` + JSX mínimo, cero dependencias nuevas, sin tocar fetch/lógica de negocio.
+
+**1. Landing (`frontend/src/pages/Landing.tsx`, reescrita) —** nav pasa de `position: absolute` (flotaba sobre el hero) a `position: sticky` con blur; hero pasa de una columna centrada a grid de 2 columnas (copy con eyebrow/highlight/CTA-con-ícono/lista de confianza real de SOUL.md + una tarjeta "mockup" decorativa 100% CSS, `aria-hidden`); sección nueva "Cómo funciona" con los 3 pasos reales del flujo (crear → elegir → generar); feature cards con icon-circle + hover-lift. Mismo azul `#1a56db`/rojo `#d92626` y logos reales, sin identidad nueva. Se borraron 3 clases CSS muertas que quedaron sin uso tras el rediseño (verificado con grep antes de borrar).
+
+**2. `user-select: none` (bloque nuevo en `App.css`, justo después de `body{}`) —** por selector explícito (nada de `*{}`) sobre botones/`a`/tabs/nav/labels/badges/títulos de página y modal. Restaurado `user-select: text` explícito en `input`/`textarea`/`select`/`.users-table td`/`.character-card-info`/`.profile-info` para blindar contra herencia. Caso real detectado y corregido: `.modal-subtitle` casi quedó no-seleccionable pero ahí Admin.tsx muestra el email real del usuario — se sacó de la lista.
+
+**3. Animaciones CSS puras** (`transition`/`@keyframes`, sin librería): `.page` (wrapper de TODAS las páginas del layout) anima fade+slide-in al montar — cubre la ruta completa sin tocar cada página; `.card`/`.character-card`/`.feature`/`.variation-card` con hover-lift consistente; botones con sombra en hover, `scale(0.97)` en `:active`, anillo en `:focus-visible`; `.modal`/`.modal-overlay` con animación de entrada (antes aparecían instantáneos); entrada escalonada (`nth-child` + `animation-delay`) en las grillas de personajes/variaciones/features/steps. Todo condicionado a `@media (prefers-reduced-motion: no-preference)`, más un bloque `reduce` al final que apaga explícitamente hover/active de tarjetas y botones.
+
+**4. Botones —** `display: inline-flex; gap: 0.4rem` unificado para alinear ícono+texto igual en todos; `:disabled` normalizado (opacity 0.5, sin transform/sombra) en los 5 tipos de botón, no solo `.btn-primary`.
+
+**5. Fricciones de UX corregidas —** variaciones no elegidas se atenúan (`.variation-card.dimmed`) al seleccionar una, en vez de perder su botón sin señal visual (`Characters.tsx`/`GenerateSpot.tsx`, una clase condicional, sin tocar el flujo). `Admin.tsx`: botones de solo-texto ("Límites", "Eliminar", "Editar", "Crear Usuario/Categoría", "Guardar"/"Cancelar"/"Cerrar") ganaron ícono + `title`, para consistencia con Characters/GenerateSpot que ya usaban ícono+texto en todo.
+
+**Verificación real ejecutada:**
+- `npx tsc -b` limpio, `npx oxlint src` limpio (exit 0), `npm run build` compila sin error.
+- Con backend (`:8000`) y frontend (`:5173`) corriendo, se confirmó por `curl` que los 5 archivos tocados transforman con 200 vía el dev server de Vite. Se verificó balance de llaves de `App.css` con un script Node (profundidad final 0) tras todas las ediciones.
+- **Sigue sin haber herramienta de automatización de navegador en este entorno** (mismo bloqueo que la pasada anterior) — no se tomaron capturas ni se recorrió el flujo clickeando en un navegador real. Pendiente que alguien con navegador confirme visualmente: landing (hero de 2 columnas, mockup, sección "Cómo funciona"), que `user-select` no rompió selección en inputs/tablas/nombre de personaje, tema claro sobre las clases nuevas, y las animaciones (fade-in de página, hover de tarjetas, entrada del modal, stagger de listas).
 
 ---
 
-## Estado IA — Completo para Fase 002
+## Verificación real ejecutada (no solo "compila")
 
-- Imágenes: Pollinations.ai (funcional)
-- Video: Kling Omni via Luma API (pendiente Fase 003)
-- NSFW: Filtro implementado (fail-closed)
-- Consistencia: imagen de referencia guardada
+Con confirmación explícita del usuario: se corrió la migración contra el Supabase real y se probó `POST /api/v1/spots` contra el sandbox real de Shotstack (no mockeado) — 3 archivos `.mp4` reales devueltos en ~14s, confirmados con `curl -I` (`Content-Type: video/mp4`). `select` decrementó el límite y persistió `output_url`. Casos negativos correctos: guión corto (400), tipo inválido (400), guión con palabra bloqueada (422 `GEN_004`, logueado), personaje no activo (400).
 
 ---
 
@@ -149,26 +107,29 @@ Se encontraron y corrigieron bugs reales (no solo estilo) verificados ejecutando
 
 ---
 
-## Pendiente para Fase 003
+## Pendiente para Fase 004
 
-- [ ] Endpoint POST /spots
-- [ ] Pipeline de generación de video (Kling Omni via Luma API)
-- [ ] Consistencia de personaje en video (usar reference_image_url)
-- [ ] Tipos de video: short (3-5s) y long (15-30s)
-- [ ] Selección de variación de video (3 opciones)
-- [ ] Sistema de rehacer para spots (máx 3 veces)
-- [ ] Control de límites semanales (5 spots/usuario/semana)
-- [ ] Frontend: página de generar spot con flujo completo
+- [ ] Gestión de personajes: editar, eliminar, reasignar categoría
+- [ ] Dashboard con métricas de uso (admin)
+- [ ] Tests E2E del flujo completo
+- [ ] Eliminación de imágenes/videos a las 24h + strip de EXIF (SOUL.md §7)
+- [ ] Decidir si se persiste `output_url` de Shotstack en storage propio antes de que expire (24h en sandbox)
+- [ ] Conseguir `SHOTSTACK_API_KEY_PRODUCTION` si se quiere salir de sandbox (sin watermark, sin expiración de 24h)
 
 ---
 
 ## Para el siguiente agente
 
 1. Leer SOUL.md antes de empezar
-2. Para levantar: `backend/.venv` ya existe (venv creado y con `requirements.txt` instalado durante esta sesión) — `uvicorn app.main:app --reload` desde `backend/`
-3. Frontend: `npm run dev` desde `frontend/` (ya tiene `node_modules` + `oxlint`)
-4. Usar `authFetch` del archivo `frontend/src/lib/api.ts` para TODAS las llamadas autenticadas — ya no hay excepciones (Dashboard/Admin corregidos)
-5. **Antes de tocar `characters.py` o `admin.py`**: los límites y el `week_start` ahora viven en `app/services/limits.py` — no los reintroduzcas duplicados
-6. Siguiente fase: **Fase 003 — Generación de Spots (Video)** — sigue sin implementar, fuera de alcance de esta sesión (decisión explícita del usuario)
-7. Proveedor de video: **Kling Omni via Luma API** (documentado en MEMORY.md)
-8. Si agregas columnas a modelos existentes: `create_all()` no las migra en tablas ya creadas en Supabase — hay que correr el `ALTER TABLE` a mano (ver MEMORY.md de esta sesión para el patrón usado)
+2. Para levantar: `backend/.venv` ya existe — `uvicorn app.main:app --reload` desde `backend/`
+3. Frontend: `npm run dev` desde `frontend/`
+4. Usar `authFetch` de `frontend/src/lib/api.ts` para TODAS las llamadas autenticadas
+5. Límites y `week_start` viven en `app/services/limits.py` — no los reintroduzcas duplicados
+6. Si agregas columnas a modelos existentes: `create_all()` no las migra en tablas ya creadas en Supabase — hay que correr el `ALTER TABLE` a mano (con confirmación del usuario)
+7. Shotstack (`video_provider.py`) es composición, no IA generativa — no asumas que puede generar movimiento de un personaje sin un proveedor imagen-a-video previo
+8. Tema claro/oscuro: `useThemeStore` en `frontend/src/store.ts`, toggle en `frontend/src/components/ThemeToggle.tsx`. Pendiente que alguien confirme visualmente en navegador (no hubo herramienta de screenshot en la sesión que lo implementó, 2026-07-17).
+9. Loading: para listas/métricas con forma conocida, usá los skeletons de `frontend/src/components/Skeleton.tsx`, no un spinner genérico — ese patrón queda solo para generación de IA de tiempo variable (`.loading-overlay`)
+10. `user-select: none` del chrome vive en un bloque explícito en `App.css` justo después de `body{}` — si agregás un botón/badge/título de UI nuevo, sumalo ahí por selector (NO uses `* { user-select: none }`); si agregás algo que muestre datos reales del usuario (email, nombre, descripción), asegurate de que no quede alcanzado por herencia — hay un segundo bloque justo debajo que restaura `user-select: text` en los contenedores de datos conocidos.
+11. Animaciones nuevas van condicionadas a `@media (prefers-reduced-motion: no-preference)` (o apagadas explícitamente en el bloque `reduce` al final de `App.css`) — no agregues un `@keyframes` que se dispare siempre sin ese guard.
+12. Sigue sin haber herramienta de automatización de navegador en este entorno (ni en la pasada de tema/skeletons ni en la de landing/animaciones/`user-select`, ambas 2026-07-17) — dos rounds seguidos de UI/UX verificados solo con `tsc`/`oxlint`/`build`/`curl`. Pendiente que alguien con navegador real confirme visualmente todo lo acumulado antes de dar por cerrado el punto "recorrer el flujo en el navegador" del DoD de frontend.md.
+13. Siguiente fase: **Fase 004 — Cierre del Alpha**
