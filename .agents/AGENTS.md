@@ -36,7 +36,7 @@ Selecciona el rol según la naturaleza de la tarea y **lee el archivo completo a
 | API, base de datos, modelos, auth, endpoints, pipelines | **Agente Backend** | `.agents/skills/backend.md` |
 | Generación de imágenes/videos, prompts, proveedor de IA, NSFW, consistencia de personajes | **Agente IA** | `.agents/skills/ai.md` |
 
-Skills de apoyo transversal (cárgalas cuando apliquen): `.agents/skills/accessibility/`, `.agents/skills/frontend-design/`, `.agents/skills/seo/`, `.agents/skills/ponytail/` (fuerza la solución más simple — útil contra sobreingeniería).
+Skills de apoyo transversal (cárgalas cuando apliquen): `.agents/skills/accessibility/`, `.agents/skills/frontend-design/`, `.agents/skills/seo/`, `.agents/skills/ponytail/` (fuerza la solución más simple — útil contra sobreingeniería), `.agents/skills/review-risk/`, `.agents/skills/review-resilience/`, `.agents/skills/review-readability/`, `.agents/skills/review-reliability/` (las 4R: Risk, Resilience, Readability, Reliability — guía conceptual en `.agents/reviews/README.md`).
 
 Si una tarea cruza dos dominios (ej. "conectar el UI de React a `/characters`"), **divídela**: primero el rol dueño del contrato (Backend define el schema), luego el consumidor (Frontend lo implementa). Escribe el contrato acordado en `MEMORY.md` para que ambos lo compartan.
 
