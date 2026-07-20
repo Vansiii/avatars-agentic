@@ -724,3 +724,29 @@
 **Para el siguiente agente:**
 - Cualquier sesión de navegador abierta ANTES de este cambio no tiene `refresh_token` en su `localStorage` persistido (`avatares-auth`) — la primera vez que su access token viejo venza, `isAuthenticated()` va a dar `false` (no hay refresh token) y va a desloguear una vez más. Después de volver a loguearse queda con el flujo nuevo y no debería cortarse de nuevo. Avisado al usuario.
 - Si se agrega un endpoint de logout-en-servidor o revocación de sesiones más adelante, hoy no existe — el refresh token no rotativo vive sus 7 días completos sin forma de invalidarlo antes (aceptado como límite conocido, ver "Hice" arriba).
+
+---
+
+## [2026-07-20] — Agente Orquestador — Revisión 4R Backend + Frontend
+
+**Hice:** Ejecuté las 4 revisiones adversariales (Risk, Resilience, Readability, Reliability) sobre `avatars-backend` y `avatars-frontend` después del force-push reset.
+
+**Hallazgos principales:**
+- **Backend 5 CRITICAL:** SECRET_KEY default hardcodeado, NSFW filter de imágenes no-op, DDL en import-time race condition, role sin validación (cualquier string), sin rate limiting.
+- **Backend 19 WARNING:** Refresh tokens no rotativos, CORS permisivo, sin middleware de errores global, admin123 hardcodeado, Dockerfile con --reload, pool DB sin pool_pre_ping, submits HeyGen secuenciales (no paralelos), check_text_nsfw con falsos positivos (substring match), dead code, estado global mutable, security.log duplicado, falta EmailStr, sin tests.
+- **Frontend 1 CRITICAL:** JWTs en localStorage (Zustand persist) — XSS vector.
+- **Frontend 16 WARNING:** Dockerfile corre dev server en prod, sin CSP, god-components (Characters 681 lines, Admin 511 lines), tipos duplicados, TanStack Query configurado sin usar, errores de API silenciados como vacío, sin ruta 404, object URLs sin liberar, sin tests.
+- **0 tests en ambos repos.**
+
+**Archivos creados:**
+- `.agents/skills/review-risk/SKILL.md` — Skill individual R1 (seguridad, permisos, datos)
+- `.agents/skills/review-resilience/SKILL.md` — Skill individual R4 (fallos, recovery, degraded)
+- `.agents/skills/review-readability/SKILL.md` — Skill individual R2 (legibilidad, estructura)
+- `.agents/skills/review-reliability/SKILL.md` — Skill individual R3 (tests, errores, edge cases)
+- `.agents/reviews/README.md` — Guía conceptual de las 4R (educativa, para humanos y agentes)
+- `.agents/reviews/4R-2026-07-20-backend-frontend.md` — Reporte completo de hallazgos
+- `.agents/AGENTS.md` — Registradas las 4 skills individualmente en skills transversales
+
+**Decisión:** Separar en skills individuales por claridad y granularidad. Cada skill se carga según la señal dominante. La guía conceptual en `.agents/reviews/README.md` explica el framework para el equipo.
+
+**Para el siguiente agente:** Las 4 skills están registradas en AGENTS.md como skills transversales. Para entender el framework 4R, leer `.agents/reviews/README.md`. Para ejecutar una revisión, cargar la skill correspondiente: `review-risk`, `review-resilience`, `review-readability`, `review-reliability`. Los reportes existentes están en `.agents/reviews/`.
