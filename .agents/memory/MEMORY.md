@@ -38,6 +38,20 @@
 
 ---
 
+## [2026-07-20] — Agente Orquestador — Research: adaptar HeyGen a formato noticiero
+
+**Hice:** el usuario pidió investigar cómo mejorar la integración de HeyGen para que los spots de categoría "noticias" se vean como un noticiero real (no solo un talking-head plano). Analicé `video_provider.py`/`spots.py` actuales y confirmé contra la documentación oficial de HeyGen (developers.heygen.com, docs.heygen.com) qué falta.
+
+**Hallazgo clave:** hoy se usa el endpoint plano `POST /v3/videos` (type=avatar/image) — solo avatar + guión + voz, sin fondo de estudio, sin rótulo inferior, sin logo, sin cintillo, sin escenas. HeyGen tiene un endpoint mejor para esto: **Template API** (`POST /v2/template/{template_id}/generate`) — se arma UNA plantilla a mano en el editor web de HeyGen (con set de noticiero completo) y por cada spot solo se mandan variables (`character`=avatar_id, `text`=guión, rótulo con nombre/cargo, `voice`, opcionalmente `image`/`video` de B-roll). HeyGen incluso vende esto como producto separado ("AI News Generator") con plantillas de sala de prensa, rótulos, cintillos. También soporta `caption`/`subtitles` para subtítulos automáticos.
+
+**Decisión:** no implementar todavía — se anotó como tarea **4.6** en `backlog.md`, bloqueada hasta que el usuario arme la(s) plantilla(s) en HeyGen y provea el `template_id` (no se puede probar sin costo real). Se descartó explícitamente el Streaming/Interactive Avatar de HeyGen (avatar en vivo vía WebRTC) — es para chat en tiempo real, no para spots pregrabados, y su infra de sesión está fuera del alcance del Alpha (SOUL.md §8, monolito sin infra de tiempo real).
+
+**Archivos:** `.agents/steering/backlog.md` (tarea 4.6 agregada), `.agents/memory/MEMORY.md` (esta entrada). Ningún archivo de código tocado.
+
+**Para el siguiente agente:** si el usuario trae un `template_id` de HeyGen, retomar la tarea 4.6. La función nueva va en `video_provider.py` junto a `_submit_video`/`generate_spot_variations` — mismo patrón de polling que ya existe para `/v3/videos`, pero apuntando a `/v2/template/{id}/generate`. La categoría "noticias" del personaje (tarea 4.2, aún sin implementar) es el gancho natural para elegir qué `template_id` usar.
+
+---
+
 ## [2026-07-15] — Agente Orquestador — Definición de proveedor de video
 
 **Hice:** Investigación comparativa de proveedores de video para spots de TV.
@@ -580,3 +594,133 @@
 **Deuda técnica nueva:** el backend (`POST /api/v1/characters`) NO valida que exista imagen o descripción — solo el frontend lo exige ahora. Si se llama al endpoint directo (Swagger, script), se puede crear un personaje sin ninguno de los dos, violando SOUL.md §1. No se corrigió porque el pedido era del formulario, no del endpoint — anotado en backlog.md.
 
 **Para el siguiente agente:** si agregás otro campo guiado, sumalo a `composeDescription()` en `Characters.tsx` — no dupliques la construcción del prompt en otro lado, el backend sigue recibiendo un solo string `description`. `GenerateSpot.tsx` no se tocó — reutiliza el `reference_image_url` ya persistido, no pasa por este flujo de descripción.
+
+---
+
+## [2026-07-20] — Agente Backend+Frontend — Migración de Shotstack a HeyGen (avatar real animado) + selector de voz
+
+**Pedido del usuario:** consiguió API key paga de HeyGen (motivo original del bloqueo de Fase 003: Shotstack es composición, no anima al personaje). Pidió reemplazar el proveedor de video, luego limitar a 1 variación mientras prueba (costo real por video), y después agregar selector de voz con preview por personaje.
+
+**Hice:**
+1. **`backend/app/services/video_provider.py` reescrito completo** — ya no usa Shotstack, usa HeyGen API v3 `POST /v3/videos` con `type: "image"` (anima la MISMA `reference_image_url` del personaje con lip-sync real sobre el guión exacto). Se investigó en vivo contra `developers.heygen.com` (SOUL.md §9.1) antes de implementar: se descartó a propósito el "Video Agent" (`/v3/video-agents`) porque ese trata el guión como concepto a elaborar creativamente (agrega escenas, reescribe texto) — no sirve para un spot con mensaje exacto aprobado por el usuario. `/v3/videos type=image` hace TTS verbatim del campo `script`, sin liberties creativas.
+2. **`_resolve_voice_id`** auto-descubre la primera voz en español del catálogo de HeyGen (cacheada en memoria por proceso) cuando el personaje no tiene voz elegida — fallback para personajes viejos.
+3. **`list_spanish_voices()`** nueva — catálogo de voces (voice_id, name, gender, preview_audio_url) para el selector del frontend.
+4. **Settings nuevos** (`backend/app/config/settings.py`): `HEYGEN_API_KEY`, `HEYGEN_VOICE_ID` (override manual opcional), `HEYGEN_SPOT_VARIATIONS` (default 3 = SOUL.md §5; en `.env` está en `1` temporalmente mientras el usuario prueba, para no gastar créditos — **subir a 3 cuando confirme que funciona**, ver `backlog.md`).
+5. **Modelo `Character`** — 2 columnas nuevas: `heygen_voice_id`, `heygen_voice_name` (voz elegida por personaje, misma idea que `reference_image_url`: consistencia entre todos los spots del personaje). **Migradas a mano contra Supabase real** (`ALTER TABLE characters ADD COLUMN IF NOT EXISTS ...`), mismo patrón que `variations_data` — `create_all()` no las hubiera creado solo.
+6. **Endpoints nuevos en `characters.py`:** `GET /api/v1/characters/heygen-voices` (catálogo, cualquier usuario autenticado) y `PATCH /api/v1/characters/{id}/voice` (fija `heygen_voice_id`/`heygen_voice_name`, valida ownership). Declarados ANTES de `GET /{character_id}` en el router — si no, FastAPI matchea `"heygen-voices"` como si fuera un `character_id`.
+7. **`spots.py`** — ambos endpoints (`create`/`redo`) pasan `character.heygen_voice_id` a `generate_spot_variations` y usan `settings.HEYGEN_SPOT_VARIATIONS` en vez de `3` fijo.
+8. **Frontend (`Characters.tsx`)** — botón "Voz"/nombre de voz en cada character-card activa → modal (`.modal-voices`) con lista de voces, cada una con `<audio controls>` nativo para preview (sin librería nueva) y botón "Usar esta voz" que llama al PATCH y actualiza la card en memoria.
+
+**Archivos:** `backend/app/services/video_provider.py` (reescrito), `backend/app/config/settings.py`, `backend/app/models/models.py`, `backend/app/schemas/character.py`, `backend/app/api/v1/characters.py`, `backend/app/api/v1/spots.py`, `backend/.env`, `frontend/src/pages/Characters.tsx`, `frontend/src/App.css`.
+
+**Decisión:** cambio de proveedor completo, no A/B — el usuario compró HeyGen específicamente para resolver el bloqueo documentado en HEARTBEAT.md ("Ninguno por ahora" del 2026-07-17 queda revertido). Se eliminó todo el código de Shotstack de `video_provider.py` (composición de planos/crops/fundidos ya no aplica); `settings.py` conserva las variables `SHOTSTACK_*` sin usar por si se quiere volver atrás, no se borraron por ser bajo costo de mantenerlas.
+
+**Verificado ejecutando (real, no solo compila):**
+- Auth + auto-descubrimiento de voz contra la API real de HeyGen (sin costo, endpoint de solo lectura) — devolvió `voice_id` válido.
+- `GET /api/v1/characters/heygen-voices` real → devuelve catálogo con `preview_audio_url` reales.
+- `PATCH /api/v1/characters/{id}/voice` real contra un personaje activo existente en Supabase → `GET` posterior confirma persistencia.
+- Negativos: sin token → 401, personaje inexistente → 404.
+- `npx tsc -b` limpio, `npx oxlint src` exit 0.
+- **No se generó ningún video de prueba real** (`POST /spots`) — consume créditos pagados de HeyGen; el usuario prefirió probarlo él mismo desde el frontend.
+
+**Para el siguiente agente:**
+- `HEYGEN_SPOT_VARIATIONS=1` en `.env` es temporal — si el usuario confirma que el flujo funciona, subirlo a `3` (o borrar la línea, el default en `settings.py` ya es `3`) para volver a cumplir SOUL.md §5. El backend necesita reiniciarse para tomar cambios de `.env` (pydantic-settings lo lee solo al arrancar).
+- HeyGen tarda más que Shotstack (minutos, no segundos) — `_poll_video` tiene timeout de 900s (15 min) por video, ajustar si en la práctica no alcanza.
+- Si se agrega un selector de avatar del catálogo de HeyGen (no solo voz): NO hacerlo — competiría con el flujo de creación de personaje propio del producto (SOUL.md §1/§4). Ya se decidió explícitamente no ofrecerlo, ver conversación con el usuario.
+
+---
+
+## [2026-07-20] — Agente Backend — Fix: preview de voz no sonaba (Content-Type roto del CDN de HeyGen)
+
+**Reporte del usuario:** "no me deja escuchar el preview de las voces" en el selector agregado en la entrada anterior.
+
+**Diagnóstico (verificado con `curl -I` real, no supuesto):** los `preview_audio_url` de `GET /v3/voices` son siempre MP3 real (magic bytes `ID3`, confirmado con `xxd`) sin importar la extensión de la URL (algunas terminan en `.wav`), pero el CDN de HeyGen a veces responde `Content-Type: binary/octet-stream` en vez de `audio/mpeg` para el mismo tipo de archivo. El `<audio src>` del navegador no reproduce un recurso si el `Content-Type` no es de audio — de ahí que algunas voces sonaran y otras no (dependía de qué endpoint del CDN sirviera esa voz en particular).
+
+**Hice:** `video_provider.fetch_voice_preview(url)` — descarga el preview server-side y `characters.py` lo re-sirve en `GET /api/v1/characters/voice-preview?url=...` forzando `Content-Type: audio/mpeg` siempre. El frontend (`Characters.tsx`) ahora apunta el `<audio src>` a ese proxy en vez de la URL directa de HeyGen. Sin auth a propósito (son clips públicos del catálogo, no datos de usuario) para que el `<audio>` nativo no necesite manejar el header `Authorization`; para no ser un proxy abierto, `fetch_voice_preview` valida que el host termine en `.heygen.ai` antes de pedir la URL (400 si no).
+
+**Archivos:** `backend/app/services/video_provider.py`, `backend/app/api/v1/characters.py`, `frontend/src/pages/Characters.tsx`.
+
+**Verificado ejecutando:** `curl` real contra el proxy para las dos variantes (una que ya venía `audio/mpeg`, otra que venía `binary/octet-stream` en origen) — ambas responden `200` + `Content-Type: audio/mpeg` + los mismos bytes `ID3` del original. SSRF: URL de host no-HeyGen → `400`. `tsc -b`/`oxlint` limpios.
+
+**Para el siguiente agente:** si se agrega cualquier otro proxy de recurso externo, seguir este patrón (validar host allowlist, forzar Content-Type conocido) en vez de confiar en lo que devuelve el proveedor externo.
+
+---
+
+## [2026-07-20] — Agente Backend+Frontend (modo plan) — Pollinations → HeyGen también en la CREACIÓN de personajes + se saca el bloqueo por límites
+
+**Pedido del usuario:** "no sería bueno ver si hay alguna forma de mejorar la personalización... seleccionar el avatar hechos en HeyGen" — quería poder elegir avatares del catálogo de HeyGen Y crearlos con HeyGen (foto propia). Esto **revierte** la entrada de esta misma sesión donde se había descartado explícitamente un selector de avatar de HeyGen "para no competir con el flujo propio del producto" — el usuario cambió de opinión y lo pidió directo, así que no es un error del agente, es una decisión de negocio nueva.
+
+**Por qué se usó modo plan:** la tarea tocaba SOUL.md (reglas de negocio), un cambio de DB, y removía una feature que funcionaba (Pollinations) — se armó un plan (`EnterPlanMode`/`ExitPlanMode`, guardado en `C:\Users\HP VICTUS\.claude\plans\eager-floating-river.md`) y se usó `AskUserQuestion` tres veces antes de escribirlo:
+1. Alcance: ¿reemplaza Pollinations del todo o queda como alternativa? → **reemplazo total**.
+2. Modos de creación con HeyGen habilitados → **foto propia + catálogo** (NO texto/prompt).
+3. Mientras se armaba el plan, surgió que HeyGen devuelve UN solo resultado por foto (no 3 variaciones como Pollinations) y cuesta crédito real — se preguntó cómo debía contar eso contra el límite semanal, y la respuesta del usuario fue mucho más amplia de lo esperado: **"No es necesario los límites, [...] es una web para uso del canal 11 TVU de la UAGRM"** → esto se convirtió en un segundo cambio (sacar el bloqueo por límites) confirmado con una pregunta de alcance aparte: se eligió **"solo dejar de bloquear"** (se mantienen los contadores como métrica para el admin, no se borra la tabla `CharacterLimit` ni la UI de límites de `Admin.tsx`).
+
+**Hice:**
+
+1. **Modelo `Character`** — 2 columnas nuevas: `heygen_avatar_id` (look id, se usa como `avatar_id` en `POST /v3/videos`), `heygen_avatar_group_id`. Migradas a mano contra Supabase real (confirmado con `information_schema.columns`).
+
+2. **`video_provider.py`:**
+   - `create_avatar_from_photo(name, image_bytes, media_type)` — `POST /v3/avatars` type=photo con `file.type=base64` (evita necesitar hosting propio de assets), luego poll vía `GET /v3/avatars/looks?group_id=...&ownership=private` hasta `status=="completed"` (reusa el mismo endpoint que ya se usaba para el catálogo, en vez de sumar un endpoint de "get look" nuevo).
+   - `list_public_avatar_looks(limit, token)` — proxy de `GET /v3/avatars/looks?ownership=public`, paginado con `next_token`.
+   - `_submit_video`/`generate_spot_variations` ahora reciben `avatar_id` opcional: si está seteado arma `type: "avatar"`, si no cae a `type: "image"` con `reference_image_url` — **compatibilidad hacia atrás con los 3 personajes ya existentes** (Maria Noticias, Pepe la mosca x2) creados antes de este cambio, que solo tienen imagen de Pollinations.
+
+3. **`image_provider.py` — borrado.** Ya no se genera nada por texto/Pollinations. Confirmado con grep que nada más lo importaba antes de borrarlo.
+
+4. **`characters.py` — reescrito:**
+   - Se eliminaron `POST /characters` (Pollinations, 3 variaciones), `POST /{id}/select`, `POST /{id}/redo` — el modelo "3 variaciones + rehacer" no aplica a HeyGen (determinístico, un solo resultado, cuesta crédito real cada intento).
+   - `POST /create-from-photo` — sube foto, valida NSFW de entrada Y salida (mismo patrón que ya existía para Pollinations, reusando `check_image_bytes_nsfw`/`check_image_url_nsfw`), llama a HeyGen. **No persiste en DB** — devuelve el resultado para que el frontend muestre "¿usar este?" antes de gastar el slot. Si el usuario descarta, no queda ningún rastro en la base (el avatar sigue existiendo huérfano del lado de HeyGen, aceptado como costo menor — no hay endpoint de borrado de personajes todavía de cualquier forma, ver backlog 4.1).
+   - `GET /heygen-catalog` — proxy del catálogo público, sin costo.
+   - `POST /confirm` — acá recién se crea el `Character` (`status="active"` directo, sin "draft" intermedio porque no hay nada más que elegir) y se cuenta contra `characters_used` (métrica, ya no bloquea).
+   - Se sacó el 403 `CHAR_001` que bloqueaba por límite semanal.
+
+5. **`spots.py`** — se sacó el 403 `VID_001`. El gate de personaje activo ahora acepta `heygen_avatar_id` **o** `reference_image_url` (compat con personajes viejos). Se pasa `character.heygen_avatar_id` a `generate_spot_variations`.
+
+6. **`schemas/character.py`** — se sacaron los schemas del flujo de variaciones (`CharacterCreate`, `CharacterVariation`, `CharacterCreateResponse`, `CharacterRedoResponse`, `CharacterSelectRequest`); se agregaron `CharacterFromPhotoResponse`, `HeygenCatalogAvatar`/`HeygenCatalogResponse`, `CharacterConfirmRequest`.
+
+7. **`SOUL.md`** — reescrito §1 (entrada válida: foto propia o catálogo, ya no texto), §3 (límites pasan de bloqueo duro a métrica, con la razón: uso interno de Canal 11 TVU), §4 (flujo de creación completo, dos caminos, sin 3 variaciones/rehacer para personajes — el rehacer de SPOTS en §5 no cambió).
+
+8. **Frontend `Characters.tsx`** — reescritura grande: se sacaron los 6 selects guiados + textarea de descripción + `composeDescription()` + toda la grilla/batches/rehacer de variaciones + el gating `canCreate`/banner de límite. Formulario nuevo: elegir modo ("Subir mi foto" / "Elegir del catálogo") → foto propia hace `create-from-photo` y muestra un único resultado con confirmar/descartar; catálogo pagina con `next_token` y confirma directo al hacer click en una tarjeta. El selector de voz (de la pasada anterior) no se tocó.
+
+9. **Frontend `GenerateSpot.tsx`** — cambio puntual: se sacó el `canCreate`/banner de límite de spots (ya no bloquea). El resto (flujo de variaciones/rehacer de SPOTS) no cambió — eso sigue siendo válido, es sobre el VIDEO no sobre la creación del personaje.
+
+**Archivos:** `backend/app/models/models.py`, `backend/app/services/video_provider.py`, `backend/app/services/image_provider.py` (borrado), `backend/app/api/v1/characters.py`, `backend/app/api/v1/spots.py`, `backend/app/schemas/character.py`, `.agents/memory/SOUL.md`, `frontend/src/pages/Characters.tsx`, `frontend/src/pages/GenerateSpot.tsx`, `frontend/src/App.css` (nuevo `.creation-mode-choice`/`.creation-mode-card`, se borró `.limits-badge` sin uso).
+
+**Verificado ejecutando (real):**
+- `python -c "import app.main"` limpio en cada paso.
+- `GET /characters/heygen-catalog` real contra HeyGen → devolvió looks públicos reales (ej. avatar "Marco").
+- `POST /characters/confirm` real con un look de ese catálogo → `GET /characters/{id}` confirmó persistencia con `heygen_avatar_id` seteado. Fila de prueba borrada de Supabase después (no hay endpoint de borrado en el producto, se hizo con SQL directo).
+- `npx tsc -b`, `npx oxlint src`, `npm run build` limpios. `curl` a los archivos tocados vía el dev server de Vite → 200.
+- **NO se probó `create-from-photo` ni `POST /spots` con un personaje creado por este flujo** — ambos consumen crédito real de HeyGen; el usuario dijo que los prueba él mismo desde el frontend (mismo patrón que ya se estableció en esta sesión para la generación de video).
+
+**Para el siguiente agente:**
+- Si un personaje viejo (sin `heygen_avatar_id`) todavía tiene `reference_image_url` de Pollinations, sigue funcionando para generar spots (`type: "image"`) — no hace falta migrar esos 3 personajes existentes.
+- No hay endpoint para eliminar/editar personajes (backlog 4.1) — ahora es más urgente: un catálogo mal elegido o una foto confirmada por error queda pegada en la lista para siempre, sin forma de sacarla desde la UI.
+- Si se agrega el modo "desde texto/prompt" con HeyGen más adelante (quedó explícitamente fuera de alcance esta vez), HeyGen sí soporta `type: "prompt"` en `POST /v3/avatars` — no investigado en profundidad en esta sesión, verificar en vivo antes de implementar.
+
+---
+
+## [2026-07-20] — Agente Backend+Frontend — Refresh token real (causa raíz de deslogueos durante la generación de spots)
+
+**Reporte del usuario:** "por qué cuando genere el video de repente me expulsó y me cerró la sesión".
+
+**Diagnóstico:** `AuthChecker` en `frontend/src/App.tsx` corre un `setInterval` cada 30s en toda página protegida y llamaba a `isAuthenticated()`, que miraba únicamente el `access_token` (`ACCESS_TOKEN_EXPIRE_MINUTES=60` en `settings.py`, **sin refresh token** — pese a que SOUL.md §9.6 ya decía "access corto + refresh 7 días", nunca se implementó). Como la generación de un video de HeyGen puede tardar varios minutos y el usuario venía de una sesión larga probando el flujo nuevo, el access token venció literalmente a mitad de la espera y el interval de 30s deslogueó de inmediato — sin relación causal directa con la generación en sí, solo coincidencia de timing por sesión larga.
+
+**Pregunté** si prefería el parche rápido (subir el tiempo de expiración) o implementar el refresh token real que SOUL.md ya pedía — **eligió refresh token real**.
+
+**Hice:**
+- `settings.py` — `ACCESS_TOKEN_EXPIRE_MINUTES` 60→**30** (ahora sí coincide con SOUL.md), nuevo `REFRESH_TOKEN_EXPIRE_DAYS=7`.
+- `auth_handler.py` — `create_access_token`/nuevo `create_refresh_token` agregan un claim `"type": "access"|"refresh"` para que uno no sirva como el otro. `decode_access_token` renombrado a `decode_token` (ahora genérico, decodifica cualquiera de los dos — el chequeo de tipo lo hace quien lo llama). Refresh token **no rotativo** (mismo token sirve hasta sus 7 días) — ponytail: rotación con storage/revocación en DB sería más seguro pero es un sistema interno de un solo canal, no expuesto públicamente; no se justificaba la complejidad.
+- `dependencies.py` (`get_current_user`) — rechaza un token con `type != "access"` (bloquea usar el refresh token directo contra la API).
+- `auth.py` — `POST /login` ahora devuelve `refresh_token` además de `access_token`. Nuevo `POST /auth/refresh` (body `{refresh_token}`) → valida tipo+firma+vigencia, devuelve un `access_token` nuevo.
+- Frontend `store.ts` — `AuthState` gana `refreshToken`/`refreshTokenExpiry` y `setAccessToken()`. **`isAuthenticated()` cambia de significado:** antes miraba `tokenExpiry` (access), ahora mira `refreshTokenExpiry` — es la definición correcta de "hay sesión viva o no". Nueva `isAccessTokenExpired()` para que `authFetch` sepa cuándo renovar.
+- Frontend `lib/api.ts` (`authFetch`) — reescrito: si el access token venció, llama a `/auth/refresh` solo (con dedup de refrescos concurrentes vía una promesa compartida) y reintenta, en vez de deslogueear. Si el refresh falla (o el refresh token también venció), recién ahí fuerza logout. También reintenta una vez tras un 401 inesperado del servidor antes de rendirse.
+- `Login.tsx` — captura `refresh_token` de la respuesta y lo pasa a `setAuth`.
+- `App.tsx` (`AuthChecker`) — **no se tocó**: como `isAuthenticated()` ya cambió de significado en el store, el mismo interval de 30s ahora hace lo correcto automáticamente (solo desloguea cuando el refresh de 7 días vence).
+
+**Archivos:** `backend/app/config/settings.py`, `backend/app/auth/auth_handler.py`, `backend/app/auth/dependencies.py`, `backend/app/schemas/auth.py`, `backend/app/api/v1/auth.py`, `frontend/src/store.ts`, `frontend/src/lib/api.ts`, `frontend/src/pages/Login.tsx`.
+
+**Verificado ejecutando (real):** login devuelve ambos tokens con su claim `type` correcto; `GET /characters` con access token → 200, con refresh token → 401; `POST /auth/refresh` con refresh token real → access token nuevo y funcional (200 en `/characters`); `POST /auth/refresh` con un access token (tipo incorrecto) → 401. `tsc -b`/`oxlint`/`build` limpios. (Nota aparte: durante la verificación el reload de `uvicorn --reload` tardó ~2s en tomar los cambios de `auth.py`/`schemas/auth.py` — un curl disparado justo en esa ventana dio una respuesta con el schema viejo y otro dio `000`; no es un bug del código, es una condición de carrera de mi propio script de verificación contra el autoreload, se resolvió solo reintentando 2s después.)
+
+**Para el siguiente agente:**
+- Cualquier sesión de navegador abierta ANTES de este cambio no tiene `refresh_token` en su `localStorage` persistido (`avatares-auth`) — la primera vez que su access token viejo venza, `isAuthenticated()` va a dar `false` (no hay refresh token) y va a desloguear una vez más. Después de volver a loguearse queda con el flujo nuevo y no debería cortarse de nuevo. Avisado al usuario.
+- Si se agrega un endpoint de logout-en-servidor o revocación de sesiones más adelante, hoy no existe — el refresh token no rotativo vive sus 7 días completos sin forma de invalidarlo antes (aceptado como límite conocido, ver "Hice" arriba).

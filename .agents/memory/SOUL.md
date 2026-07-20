@@ -12,11 +12,11 @@
 
 **Qué NO es en el Alpha:** no hay edición de video manual, ni efectos especiales complejos, ni streaming en vivo, ni app móvil nativa, ni marketplace de personajes de terceros.
 
-**Entrada válida:** imagen JPEG/PNG/WEBP de ≤ 10 MB, **o** un prompt de texto de 10 a 500 caracteres, **o** ambos. Al menos uno de los dos es obligatorio.
+**Entrada válida (2026-07-20, reemplaza el flujo por texto/Pollinations):** **foto propia** JPEG/PNG/WEBP de ≤ 10 MB (HeyGen la convierte en avatar animable), **o** selección de un avatar del **catálogo público de HeyGen**. No hay generación de personaje por prompt de texto — HeyGen es quien provee la identidad, no un generador de imágenes por descripción.
 
-**Salida:** imagen hiperrealista del personaje + video del spot (corto 3-5s o largo 15-30s).
+**Salida:** avatar del personaje (foto propia animada o del catálogo de HeyGen) + video del spot (corto 3-5s o largo 15-30s), animado con lip-sync real por HeyGen.
 
-**Restricción de estilo:** Solo se genera contenido **hiperrealista**. No hay otros estilos.
+**Restricción de estilo:** el catálogo de HeyGen es mayormente presentadores realistas — no se ofrecen estilos ilustrados/cartoon en la selección.
 
 ---
 
@@ -39,35 +39,44 @@
 
 ---
 
-## 3. Límites del Plan Gratuito
+## 3. Uso semanal (ya NO son límites duros)
 
-| Recurso | Límite |
-|---------|--------|
-| Crear/editar personajes | **2 por semana** |
-| Generar spots (videos) | **5 por semana** |
-| Rehacer generación | **3 veces gratis** (no consume crédito) |
+**(Actualizado 2026-07-20)** Este sistema es de **uso interno para Canal 11 TVU (UAGRM)**, no un producto con plan gratuito — el usuario pidió explícitamente sacar el bloqueo. Ya NO existen los códigos `CHAR_001`/`VID_001` ni ningún 403 por límite alcanzado.
 
-**Reglas duras de límites:**
-- Al alcanzar el límite semanal de personajes, el endpoint responde **403** con código `CHAR_001`.
-- Al alcanzar el límite semanal de spots, el endpoint responde **403** con código `VID_001`.
-- Los límites se resetean cada lunes a las 00:00 UTC.
+Se **mantiene el conteo** (`characters_used`/`spots_used` por semana) únicamente como **métrica visible para el admin** — para saber cuánto se está usando el canal, sin restringir a nadie. El admin conserva la capacidad de fijar un override por usuario (`characters_limit_override`/`spots_limit_override`) por si en el futuro se decide reactivar un tope, pero hoy no se aplica en ningún endpoint.
+
+- Los contadores se resetean cada lunes a las 00:00 UTC (igual que antes).
 - Un usuario `user` no puede crear roles de `admin`. Nunca se degrada silenciosamente.
 
 ---
 
 ## 4. Flujo de Creación de Personaje
 
+**(Reescrito 2026-07-20 — HeyGen reemplaza a Pollinations.)** Ya no hay "3 variaciones + rehacer": HeyGen devuelve un único resultado determinístico por foto (no variaciones aleatorias) y cada llamada consume crédito real de la cuenta HeyGen, así que el flujo se divide en dos caminos según el origen del avatar:
+
+**Camino A — Foto propia:**
 ```
-1. Usuario envía entrada (imagen +/o texto)
-2. Sistema valida la entrada (formato, tamaño, que la imagen no sea basura)
-3. Sistema genera imagen hiperrealista del personaje (3 variaciones)
-4. Usuario elige la que más le gusta
-5. Si ninguna le gusta → "Rehacer" (gratis, máximo 3 veces)
-6. Después de 3 rehacers, DEBE elegir una
-7. Solo al ELEGIR se decrementa el contador de personajes de la semana
+1. Usuario sube una foto (nombre + categoría + archivo)
+2. Sistema valida la entrada (formato, tamaño, NSFW) y llama a HeyGen para crear el avatar
+3. HeyGen devuelve UN resultado (no hay variaciones para elegir)
+4. Sistema valida la SALIDA (NSFW) antes de mostrarla
+5. Usuario confirma "usar este personaje" o descarta y sube otra foto
+   (si descarta, no queda nada guardado en la base de datos — el intento
+   igual costó crédito real de HeyGen, no hay forma de recuperarlo)
+6. Solo al CONFIRMAR se crea el personaje (status "active" directo) y se
+   cuenta contra el uso semanal (métrica, ver §3 — ya no bloquea)
 ```
 
-**Consistencia del personaje:** Una vez creado, el personaje tiene una imagen de referencia que se usa en TODAS las generaciones de video posteriores. El mismo personaje se ve igual en todos los spots de su categoría.
+**Camino B — Catálogo de HeyGen:**
+```
+1. Usuario ingresa nombre + categoría
+2. Sistema muestra el catálogo público de avatares de HeyGen (paginado)
+3. Usuario elige uno directamente — no hay variaciones que generar,
+   el catálogo entero ya es "las opciones"
+4. Se crea el personaje de inmediato (status "active") y cuenta el uso
+```
+
+**Consistencia del personaje:** el personaje guarda el `avatar_id`/`avatar_group_id` de HeyGen (o, para personajes creados antes de este cambio, la imagen de referencia de Pollinations) — ese identificador se usa en TODAS las generaciones de video posteriores. El mismo personaje se ve igual en todos los spots de su categoría.
 
 ---
 

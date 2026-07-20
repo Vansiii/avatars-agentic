@@ -3,7 +3,9 @@
 > **Foto del estado ACTUAL.** Este archivo se **sobrescribe** en cada cambio de turno.
 > No es un historial: si buscas qué pasó antes, ve a `MEMORY.md`.
 
-**Última actualización:** 2026-07-20 — Formulario de creación de personaje (`Characters.tsx`) ganó 6 selects guiados (género, edad, tono de piel, cabello, vestimenta, estilo de presentación) que se combinan con el texto libre en `composeDescription()` y viajan como el mismo campo `description` de siempre — el backend NO cambió. Objetivo: prompts de imagen más precisos, con "estilo de presentación" mapeado directo al pedido del usuario de que los avatares sirven tanto para spots de noticias (formal) como para contenido de valor (cercano/carismático). También se agregó validación de que exista imagen O descripción antes de enviar (el backend sigue sin validarlo — deuda anotada en MEMORY.md 2026-07-20 y backlog.md). Verificado con `tsc -b`/`oxlint`/`npm run build` limpios; **sin confirmación visual en navegador real** (sin herramienta de automatización en este entorno, bloqueo recurrente). Ver entrada completa en MEMORY.md.
+**Última actualización:** 2026-07-20 (cuarta pasada del día) — **Refresh token real de auth**, implementando lo que SOUL.md §9.6 ya pedía (access corto + refresh 7 días) pero nunca existía. Causa raíz de "me expulsó de la nada durante la generación": `AuthChecker` en `App.tsx` corre cada 30s y antes deslogueaba apenas vencía el access token (60 min, sin refresh) — bastaba con que la sesión completa (crear personaje + esperar un video de HeyGen, que puede tardar varios minutos) pasara de 60 min para que te pateara a mitad de una espera. Ahora: `POST /api/v1/auth/login` devuelve `access_token` (30 min) + `refresh_token` (7 días, claim `type` distingue uno de otro); `POST /api/v1/auth/refresh` cambia un refresh válido por un access nuevo; `authFetch` (`frontend/src/lib/api.ts`) renueva solo antes de cada request si el access venció, y solo fuerza logout si el REFRESH también venció o el refresh falla. `isAuthenticated()` en el store cambió de significado: antes miraba el access token, ahora mira el refresh token — es la definición correcta de "sesión viva". **Importante:** cualquier sesión ya abierta en el navegador antes de este cambio no tiene `refresh_token` guardado — la primera vez que el access token viejo venza después de este deploy, va a deslogueear una vez más; después de volver a loguearse, ya funciona sin cortes. Verificado real: login, refresh, y que un refresh token usado como access (y viceversa) se rechaza con 401. `tsc`/`oxlint`/`build` limpios.
+
+**Actualización anterior (tercera pasada del día):** **Pollinations reemplazado por HeyGen también para la CREACIÓN de personajes** (no solo el video). Reemplazo total, decisión explícita del usuario: revierte lo que decía la entrada anterior de "no agregar selector de avatar de HeyGen". Dos caminos nuevos en `Characters.tsx`: **foto propia** (`POST /characters/create-from-photo` crea un avatar animable en HeyGen — UN solo resultado determinístico, no 3 variaciones, cuesta crédito real; el usuario confirma con `POST /characters/confirm` o descarta sin guardar nada) y **catálogo de HeyGen** (`GET /characters/heygen-catalog`, elegir directo y confirmar). `image_provider.py` (Pollinations) se borró. `Character` ganó `heygen_avatar_id`/`heygen_avatar_group_id` (migrado a mano en Supabase), usado en `POST /v3/videos type=avatar` para generar spots — con fallback a `type=image`/`reference_image_url` para los 3 personajes viejos de Pollinations (compatibilidad hacia atrás, no se rompieron). **Además, se sacó el bloqueo por límite semanal** (ya no hay 403 `CHAR_001`/`VID_001`) — el sistema es de uso interno de Canal 11 TVU (UAGRM), no un producto con plan gratuito; se mantienen los contadores solo como métrica para el admin. SOUL.md §1/§3/§4 reescritos para reflejar todo esto. Verificado real: `GET /heygen-catalog` y `POST /confirm` contra HeyGen/Supabase reales (gratis, fila de prueba borrada después); `tsc -b`/`oxlint`/`build` limpios. **NO se probó `create-from-photo` ni `POST /spots` con un personaje nuevo** (ambos cuestan crédito real) — pendiente que el usuario lo pruebe desde el frontend. Ver entrada completa en MEMORY.md.
 
 ---
 
@@ -22,27 +24,40 @@
 
 ## Bloqueos actuales
 
-1. **Videos de Shotstack en modo `sandbox` expiran a las 24h** (`x-amz-expiration: Delete After 24 Hours` en el S3 de salida, confirmado con `curl -I` real). Un spot seleccionado hoy deja de tener `output_url` funcional mañana. Para producción real hace falta `SHOTSTACK_API_KEY_PRODUCTION` (hoy `xxxxx` en `.env`) y, probablemente, descargar/re-alojar el video en storage propio antes de que expire. No implementado — anotado para Fase 004.
-2. **Shotstack no genera movimiento de IA del personaje** — es un motor de composición. El usuario pidió explícitamente un avatar animado real ("que interactúe a lo largo del video") y se le presentaron opciones investigadas en vivo (HeyGen recomendado, Hedra alternativa) — respondió **"Ninguno por ahora"**, así que se mejoró el montage dentro de Shotstack (varios planos/encuadres de la misma foto + fundidos + subtítulos segmentados) en vez de sumar proveedor. Si el usuario cambia de opinión, retomar la comparación ya hecha en `MEMORY.md` (re-verificar contra docs oficiales, el campo cambia rápido) — hace falta sumar un proveedor imagen-a-video/foto-a-avatar ANTES de Shotstack, no en su lugar.
-3. **Pollinations.ai (free tier) rate-limita bajo ráfagas (429).** Sigue igual que antes — no relacionado a Fase 003.
+1. ~~Videos de Shotstack en modo `sandbox` expiran a las 24h~~ **YA NO APLICA** (2026-07-20) — se dejó de usar Shotstack. `SHOTSTACK_*` sigue en `settings.py`/`.env` sin usar, por si se quiere volver atrás.
+2. ~~Shotstack no genera movimiento de IA del personaje~~ **RESUELTO (2026-07-20)** — HeyGen anima el personaje con lip-sync real. Falta que el usuario confirme un spot real de punta a punta desde el frontend (costo real en créditos, no probado por el agente) — ver MEMORY.md.
+3. ~~Pollinations.ai (free tier) rate-limita bajo ráfagas (429)~~ **YA NO APLICA** (2026-07-20) — Pollinations se dejó de usar por completo, la creación de personajes también pasa por HeyGen ahora.
+4. **`HEYGEN_SPOT_VARIATIONS=1` en `.env` es temporal** (default de negocio es 3, SOUL.md §5) — el usuario lo bajó para no gastar créditos mientras prueba. Subir a 3 (o borrar la línea) apenas confirme que el flujo funciona, y reiniciar el backend (pydantic-settings solo lee `.env` al arrancar).
+5. **Falta probar en vivo `POST /characters/create-from-photo` y `POST /spots` con un personaje creado por este flujo nuevo** (ambos cuestan crédito real de HeyGen) — pendiente de que el usuario lo pruebe desde el frontend.
+6. **No hay endpoint para eliminar personajes** (backlog Fase 004, ítem 4.1, sigue sin implementar) — si el usuario elige mal un avatar del catálogo o confirma una foto que no le gustó después de todo, no hay forma de sacarlo de la lista desde la UI todavía.
 
 ---
 
-## Estado Backend — Fase 003 agregada (2026-07-17)
+## Estado Backend — Fase 003 (2026-07-17) + reescritura de Fase 002 (2026-07-20)
 
-### Spots (nuevo)
-- POST /api/v1/spots — genera 3 variaciones de video (personaje activo + guión + tipo corto/largo); valida guión 10-500 chars, NSFW de texto fail-closed, límite semanal (`VID_001`)
+### Spots
+- POST /api/v1/spots — genera N variaciones de video (`settings.HEYGEN_SPOT_VARIATIONS`, hoy `1`) del personaje activo + guión + tipo corto/largo; valida guión 10-500 chars, NSFW de texto fail-closed. **Ya no bloquea por límite semanal** (se sacó el 403 `VID_001`, ver SOUL.md §3).
 - GET /api/v1/spots — lista spots del usuario
 - GET /api/v1/spots/{id} — obtener spot
-- POST /api/v1/spots/{id}/select — selecciona variación; solo aquí se decrementa `spots_used`
-- POST /api/v1/spots/{id}/redo — rehacer (máx 3, no decrementa límite)
+- POST /api/v1/spots/{id}/select — selecciona variación; solo aquí se incrementa `spots_used` (métrica, ya no límite)
+- POST /api/v1/spots/{id}/redo — rehacer (máx 3, sin cambios — esto es sobre el VIDEO, no la creación del personaje)
+
+### Characters (reescrito 2026-07-20, ya no usa Pollinations)
+- POST /api/v1/characters/create-from-photo — sube una foto, HeyGen crea un avatar animable (`POST /v3/avatars` type=photo, base64, con polling hasta `status=completed`). Un solo resultado, NO se persiste como Character todavía.
+- GET /api/v1/characters/heygen-catalog?token= — catálogo público de HeyGen paginado (`GET /v3/avatars/looks?ownership=public`).
+- POST /api/v1/characters/confirm — recién acá se crea el `Character` (status `active` directo, sin "draft"); incrementa `characters_used` (métrica, ya no bloquea).
+- GET /api/v1/characters, GET /api/v1/characters/{id} — sin cambios de forma (ganan `heygen_avatar_id`/`heygen_avatar_group_id` en la respuesta).
+- GET /heygen-voices, PATCH /{id}/voice, GET /voice-preview — de la pasada anterior (selector de voz), sin cambios.
+- **Se eliminaron:** `POST /characters` (Pollinations, 3 variaciones), `POST /characters/{id}/select`, `POST /characters/{id}/redo` — el modelo de "3 variaciones + rehacer" no aplica a HeyGen (resultado único y determinístico, cuesta crédito real). Ver SOUL.md §4.
 
 ### Servicios
-- `video_provider.py` — **reescrito**: llama a Shotstack real (`build_spot_edit`, `_submit_render`, `_poll_render`, `generate_spot_variations`). Antes era un placeholder que devolvía URLs falsas. Cada spot lleva narración con el `text-to-speech` nativo de Shotstack (voz Lupe, es-US, modo newscaster) — no un proveedor externo (Pollinations TTS quedó deprecado, verificado en vivo).
-- `settings.py` — nuevas variables `SHOTSTACK_API_KEY_SANDBOX`, `SHOTSTACK_API_KEY_PRODUCTION`, `SHOTSTACK_ENV`.
+- `video_provider.py` — `_submit_video` ahora arma `type: "avatar"` (con `avatar_id`) o `type: "image"` (con `reference_image_url`, fallback para personajes viejos) según qué tenga el `Character`. Nuevas `create_avatar_from_photo()` y `list_public_avatar_looks()`.
+- `image_provider.py` — **borrado**, ya no se genera nada por Pollinations.
+- `settings.py` — `SHOTSTACK_*` (sin uso, se dejó por si se revierte), `HEYGEN_API_KEY`, `HEYGEN_VOICE_ID` (override manual), `HEYGEN_SPOT_VARIATIONS` (default 3, hoy en `1` temporalmente en `.env`).
 
 ### DB
-- `Spot.variations_data` (Text, nullable) — **agregada a mano contra Supabase** (`ALTER TABLE spots ADD COLUMN IF NOT EXISTS variations_data TEXT`), mismo patrón que `characters_limit_override`. `create_all()` no la hubiera creado sola en una tabla ya existente.
+- `Spot.variations_data` (Text, nullable) — agregada a mano contra Supabase, mismo patrón que `characters_limit_override`.
+- `Character.heygen_avatar_id`, `Character.heygen_avatar_group_id` (String, nullable) — **agregadas a mano contra Supabase 2026-07-20**, mismo patrón. `create_all()` no las hubiera creado solas en una tabla ya existente.
 
 ---
 
@@ -109,12 +124,13 @@ Con confirmación explícita del usuario: se corrió la migración contra el Sup
 
 ## Pendiente para Fase 004
 
-- [ ] Gestión de personajes: editar, eliminar, reasignar categoría
+- [ ] Gestión de personajes: editar, eliminar, reasignar categoría — **más urgente desde 2026-07-20**: si el usuario confirma un personaje por error (foto o catálogo), hoy no hay forma de sacarlo de la lista
 - [ ] Dashboard con métricas de uso (admin)
 - [ ] Tests E2E del flujo completo
 - [ ] Eliminación de imágenes/videos a las 24h + strip de EXIF (SOUL.md §7)
-- [ ] Decidir si se persiste `output_url` de Shotstack en storage propio antes de que expire (24h en sandbox)
-- [ ] Conseguir `SHOTSTACK_API_KEY_PRODUCTION` si se quiere salir de sandbox (sin watermark, sin expiración de 24h)
+- [ ] ~~Decidir si se persiste `output_url` de Shotstack...~~ ya no aplica (se dejó Shotstack) — **nuevo:** verificar si `video_url` de HeyGen expira y si hace falta re-alojarlo en storage propio (no verificado todavía)
+- [ ] ~~Conseguir `SHOTSTACK_API_KEY_PRODUCTION`~~ ya no aplica, se dejó Shotstack por HeyGen (2026-07-20)
+- [ ] Subir `HEYGEN_SPOT_VARIATIONS` de `1` a `3` en `.env` cuando el usuario confirme que el flujo de spots con HeyGen funciona de punta a punta
 
 ---
 
@@ -133,3 +149,8 @@ Con confirmación explícita del usuario: se corrió la migración contra el Sup
 11. Animaciones nuevas van condicionadas a `@media (prefers-reduced-motion: no-preference)` (o apagadas explícitamente en el bloque `reduce` al final de `App.css`) — no agregues un `@keyframes` que se dispare siempre sin ese guard.
 12. **(RESUELTO 2026-07-18)** El usuario confirmó el frontend en navegador real (`localhost:5173`, "Está bien el frontend") — se cierra el punto "recorrer el flujo en el navegador" del DoD de frontend.md que arrastraban las dos pasadas de 2026-07-17. Sigue sin haber herramienta de automatización de navegador en el entorno del agente (las verificaciones automáticas siguen siendo `tsc`/`oxlint`/`build`/`curl`), pero la confirmación visual humana ya está hecha sobre el estado acumulado.
 13. Siguiente fase: **Fase 004 — Cierre del Alpha**
+14. **(2026-07-20) Proveedor de video ahora es HeyGen**, no Shotstack — `video_provider.py` reescrito, ver MEMORY.md. `HEYGEN_SPOT_VARIATIONS=1` en `.env` es temporal (subir a 3 cuando el usuario confirme el flujo, y reiniciar el backend).
+15. **(2026-07-20, reversa lo que decía el punto 14) La creación de personajes TAMBIÉN pasa por HeyGen ahora** (foto propia o catálogo) — Pollinations/`image_provider.py` se eliminó por completo. Si tocás `Characters.tsx` o `characters.py`, el flujo es: `create-from-photo`/`heygen-catalog` → `confirm`. No hay más "3 variaciones + rehacer" para personajes (sí sigue para spots/video). Ver SOUL.md §4 y MEMORY.md 2026-07-20 para el porqué del giro.
+16. **(2026-07-20) Los límites semanales (SOUL.md §3) ya NO bloquean** — no busques ni reintroduzcas los códigos `CHAR_001`/`VID_001`, se sacaron a propósito (uso interno de Canal 11 TVU, no plan gratuito). Los contadores siguen sumando solo para las métricas del admin.
+17. **Pendiente de probar con costo real:** `create-from-photo` y `POST /spots` sobre un personaje creado por el flujo nuevo — nadie los corrió todavía (consumen crédito real de HeyGen), el usuario dijo que los prueba él mismo desde el frontend.
+18. **(2026-07-20) Refresh token real de auth** — `access_token` (30 min) + `refresh_token` (7 días), `POST /api/v1/auth/refresh`. `authFetch` renueva solo, `isAuthenticated()` del store ahora mira el refresh token (antes miraba el access, por eso deslogueaba a media generación de video). Si tocás algo de auth: `decode_access_token` ya no existe, se llama `decode_token` (genérico, distingue por claim `type`). Ver MEMORY.md.

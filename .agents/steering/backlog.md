@@ -58,6 +58,7 @@
 - [ ] **4.3** 🟢 · Dashboard con métricas de uso (admin)
 - [ ] **4.4** 🟢 · Tests E2E del flujo completo
 - [ ] **4.5** 🟢 · README de arranque: cómo levantar el sistema
+- [ ] **4.6** 🟡 · Formato "noticiero" para spots de categoría noticias — usar el **Template API de HeyGen** (`POST /v2/template/{template_id}/generate`) en vez del endpoint plano `/v3/videos` que usa hoy `video_provider.py`. Requiere: (1) el usuario arma manualmente 1-2 plantillas en el editor web de HeyGen (fondo de estudio, rótulo inferior con nombre/cargo, logo de Canal 11 TVU, cintillo — HeyGen ya ofrece esto como producto "AI News Generator"); (2) el agente agrega una función en `video_provider.py` que llame ese endpoint mapeando `avatar_id`→variable `character`, guión→variable `text`/voz, nombre del personaje→variable del rótulo, y opcionalmente una imagen/video de B-roll; (3) `template_id` fijo por categoría (constante en `settings.py` o campo en `SpotCategory` si ya existe esa tabla — ver 4.2, encajan). De regalo: la Template API soporta `caption`/`subtitles` para subtítulos automáticos, útil para accesibilidad y recortes de redes. Bloqueado hasta que el usuario provea el `template_id` (no se puede probar sin costo real de HeyGen). NO usar Interactive/Streaming Avatar (HeyGen) para esto — es para avatares en vivo vía WebRTC, no para spots pregrabados, y su infra de sesión en tiempo real está fuera del alcance del Alpha (SOUL.md §8).
 
 ---
 
