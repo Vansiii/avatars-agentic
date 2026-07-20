@@ -11,6 +11,18 @@
       "sourceType": "autoskills-registry",
       "computedHash": "82fb11a63fb1e35ee2469516ed02d54695f783115b1540c0e783197af4240a3a"
     },
+    "heygen-avatar": {
+      "source": "heygen-com/skills",
+      "sourceType": "github",
+      "skillPath": "heygen-avatar/SKILL.md",
+      "computedHash": "8c4ee55ca076a871df606510a44f3b01af49928d2567ba4d88987a069b953b32"
+    },
+    "heygen-video": {
+      "source": "heygen-com/skills",
+      "sourceType": "github",
+      "skillPath": "heygen-video/SKILL.md",
+      "computedHash": "30000ff8d7b3371ec4b5c5a8d5bb90fcd67789cf105c959f371f20497cf2cf79"
+    },
     "ponytail": {
       "source": "dietrichgebert/ponytail",
       "sourceType": "github",

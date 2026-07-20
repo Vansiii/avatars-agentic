@@ -561,3 +561,22 @@
 **Verificado ejecutando + POR FIN EN NAVEGADOR:** `tsc -b` limpio, `oxlint src` exit 0, dev server responde 200. **El usuario abrió `localhost:5173` y confirmó visualmente** ("Está bien el frontend") — cierra el punto "recorrer el flujo en el navegador" del DoD de frontend.md que quedó pendiente las DOS pasadas anteriores (2026-07-17).
 
 **Para el siguiente agente:** si agregás items al sidebar o botones al chrome, el patrón mobile ya está — el sidebar off-canvas y la topbar viven en `DashboardLayout.tsx`, el CSS responsive en el bloque final de `App.css` bajo `@media (max-width: 900px)`. El breakpoint del shell es 900px; el de la landing sigue en 860px (no los unifiqué, son componentes distintos). Cualquier botón nuevo hereda automáticamente el min-height de Fitts si usa `.btn-secondary`/`.btn-danger`.
+
+---
+
+## [2026-07-20] — Agente Frontend — Formulario de creación de personaje: campos guiados de apariencia/estilo
+
+**Pedido del usuario:** mejorar el formulario de creación de personaje para que sea más personalizable y preciso, considerando que los avatares se usan tanto para spots de noticias como para creación de contenido de valor.
+
+**Hice (solo `frontend/src/pages/Characters.tsx`, cero cambios de backend/DB):** el campo `description` ya viaja sin cambios a `build_character_prompt()` (`backend/app/services/image_provider.py`), así que la precisión se ganó agregando selects guiados en vez de dejar solo un textarea libre — el usuario rara vez completa un textarea vacío con suficiente detalle para un prompt de generación de imagen.
+
+- 6 selects opcionales nuevos: género, edad aparente, tono de piel, cabello, vestimenta, y **estilo de presentación** (este último mapea directo al caso de uso: "formal como presentador de noticias" vs "cercano como creador de contenido" vs enérgico/serio) — todos como constantes `_OPTIONS` arriba del componente.
+- `composeDescription()` combina las selecciones + el textarea libre (renombrado "Detalles adicionales") en una sola oración, recortada a 500 caracteres (límite ya validado en backend, `MAX_DESCRIPTION_LENGTH`).
+- Vista previa en vivo de la descripción compuesta antes de enviar (transparencia sobre qué prompt se va a usar).
+- Validación nueva: si no hay imagen de referencia NI descripción compuesta, bloquea el submit — antes el form dejaba crear un personaje sin imagen y sin texto (violaba SOUL.md §1 "al menos uno de los dos es obligatorio", que el backend tampoco valida — **deuda anotada abajo**, no corregida en backend porque el pedido era del formulario).
+
+**Verificado ejecutando:** `npx tsc -b` limpio, `npx oxlint src` exit 0, `npm run build` compila sin error. **No se recorrió en navegador real** (sin herramienta de automatización en este entorno, mismo bloqueo recurrente) — pendiente confirmación visual humana de los 6 selects nuevos y la vista previa.
+
+**Deuda técnica nueva:** el backend (`POST /api/v1/characters`) NO valida que exista imagen o descripción — solo el frontend lo exige ahora. Si se llama al endpoint directo (Swagger, script), se puede crear un personaje sin ninguno de los dos, violando SOUL.md §1. No se corrigió porque el pedido era del formulario, no del endpoint — anotado en backlog.md.
+
+**Para el siguiente agente:** si agregás otro campo guiado, sumalo a `composeDescription()` en `Characters.tsx` — no dupliques la construcción del prompt en otro lado, el backend sigue recibiendo un solo string `description`. `GenerateSpot.tsx` no se tocó — reutiliza el `reference_image_url` ya persistido, no pasa por este flujo de descripción.
